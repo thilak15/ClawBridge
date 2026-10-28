@@ -14,16 +14,17 @@ class DecryptionError(Exception):
 
 
 class EnvelopeCipher:
-    """AES-256-GCM envelope cipher for securing credentials and OAuth tokens at rest."""
+    """AES-256-GCM envelope cipher using KEK to wrap ephemeral per-record DEKs."""
 
     NONCE_SIZE = 12  # Standard 96-bit nonce for AES-GCM
     KEY_SIZE = 32    # 256-bit key
+    WRAPPED_DEK_SIZE = 12 + 32 + 16  # KEK nonce (12) + DEK (32) + AEAD tag (16)
 
     def __init__(self, key: bytes):
         if len(key) != self.KEY_SIZE:
             raise ValueError(f"AES-256 key must be exactly {self.KEY_SIZE} bytes, got {len(key)}")
-        self._key = key
-        self._aesgcm = AESGCM(key)
+        self._kek = key
+        self._kek_cipher = AESGCM(key)
 
     @classmethod
     def generate_key(cls) -> bytes:
@@ -43,30 +44,50 @@ class EnvelopeCipher:
         return cls(derived_key)
 
     def encrypt(self, plaintext: bytes, associated_data: bytes | None = None) -> bytes:
-        """Encrypt plaintext bytes with a fresh random nonce.
+        """Envelope-encrypt plaintext: generate ephemeral DEK, wrap DEK with KEK, encrypt payload with DEK.
 
         Returns:
-            bytes: nonce (12 bytes) + ciphertext + 16-byte auth tag
+            bytes: wrapped_dek (60 bytes) + dek_nonce (12 bytes) + ciphertext + tag (16 bytes)
         """
-        nonce = os.urandom(self.NONCE_SIZE)
-        ciphertext = self._aesgcm.encrypt(nonce, plaintext, associated_data)
-        return nonce + ciphertext
+        dek = AESGCM.generate_key(bit_length=256)
+        kek_nonce = os.urandom(self.NONCE_SIZE)
+        wrapped_dek = kek_nonce + self._kek_cipher.encrypt(kek_nonce, dek, None)
+
+        dek_nonce = os.urandom(self.NONCE_SIZE)
+        dek_cipher = AESGCM(dek)
+        ciphertext = dek_cipher.encrypt(dek_nonce, plaintext, associated_data)
+
+        return wrapped_dek + dek_nonce + ciphertext
 
     def decrypt(self, payload: bytes, associated_data: bytes | None = None) -> bytes:
-        """Decrypt payload bytes, verifying the integrity tag.
+        """Decrypt envelope payload: unwrap DEK with KEK, then decrypt payload with DEK.
 
         Raises:
-            DecryptionError: if payload is too short, tampered with, or key is invalid.
+            DecryptionError: if payload is tampered with, invalid key, or invalid tag.
         """
-        if len(payload) < self.NONCE_SIZE + 16:  # 12-byte nonce + 16-byte tag
-            raise DecryptionError("Ciphertext payload is too short to be valid AES-GCM")
+        if len(payload) < self.WRAPPED_DEK_SIZE + self.NONCE_SIZE + 16:
+            raise DecryptionError("Ciphertext payload is too short to be valid envelope ciphertext")
 
-        nonce = payload[:self.NONCE_SIZE]
-        ciphertext = payload[self.NONCE_SIZE:]
+        wrapped_dek = payload[:self.WRAPPED_DEK_SIZE]
+        kek_nonce = wrapped_dek[:self.NONCE_SIZE]
+        encrypted_dek = wrapped_dek[self.NONCE_SIZE:]
 
         try:
-            return self._aesgcm.decrypt(nonce, ciphertext, associated_data)
+            dek = self._kek_cipher.decrypt(kek_nonce, encrypted_dek, None)
         except InvalidTag as exc:
-            raise DecryptionError("Ciphertext authentication tag verification failed") from exc
+            raise DecryptionError("KEK tag verification failed (wrong master key or tampered DEK)") from exc
         except Exception as exc:
-            raise DecryptionError(f"Decryption failed: {exc}") from exc
+            raise DecryptionError(f"Failed to unwrap DEK: {exc}") from exc
+
+        dek_data = payload[self.WRAPPED_DEK_SIZE:]
+        dek_nonce = dek_data[:self.NONCE_SIZE]
+        ciphertext = dek_data[self.NONCE_SIZE:]
+
+        try:
+            dek_cipher = AESGCM(dek)
+            return dek_cipher.decrypt(dek_nonce, ciphertext, associated_data)
+        except InvalidTag as exc:
+            raise DecryptionError("DEK payload authentication tag verification failed") from exc
+        except Exception as exc:
+            raise DecryptionError(f"Failed to decrypt payload with DEK: {exc}") from exc
+

@@ -42,3 +42,4 @@ def test_schema_migrations_applied_idempotently(tmp_path: Path):
     with db_mgr.connection() as conn:
         count = conn.execute("SELECT COUNT(*) FROM schema_migrations WHERE version=1").fetchone()[0]
         assert count == 1
+

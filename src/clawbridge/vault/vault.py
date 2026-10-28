@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable
 
+from authlib.oauth2.rfc6749 import OAuth2Token  # type: ignore[import-untyped]
+
 from clawbridge.vault.crypto import EnvelopeCipher
 from clawbridge.vault.db import DatabaseManager
 from clawbridge.vault.single_flight import SingleFlightGroup
@@ -36,24 +38,41 @@ class StoredCredential:
 
 @dataclass(frozen=True)
 class OAuthTokenRecord:
-    """Represents a decrypted OAuth token entry with expiry metadata."""
+    """Represents a decrypted OAuth token entry backed by Authlib OAuth2Token."""
     id: str
     channel: str
     client_id: str
-    access_token: str
-    refresh_token: str | None
-    token_type: str
-    scope: str
-    expires_at: float | None
+    token: OAuth2Token
     created_at: str
     updated_at: str
 
     @property
+    def access_token(self) -> str:
+        return str(self.token.get("access_token", ""))
+
+    @property
+    def refresh_token(self) -> str | None:
+        return self.token.get("refresh_token")
+
+    @property
+    def token_type(self) -> str:
+        return str(self.token.get("token_type", "Bearer"))
+
+    @property
+    def scope(self) -> str:
+        return str(self.token.get("scope", ""))
+
+    @property
+    def expires_at(self) -> float | None:
+        return self.token.get("expires_at")
+
+    @property
     def is_expired(self) -> bool:
-        """Check if token is expired with a 30-second pre-expiry buffer."""
-        if self.expires_at is None:
+        """Check if token is expired using Authlib OAuth2Token logic with a 30s buffer."""
+        expires_at = self.token.get("expires_at")
+        if expires_at is None:
             return False
-        return time.time() >= (self.expires_at - 30.0)
+        return time.time() >= (float(expires_at) - 30.0)
 
 
 class CredentialVault:
@@ -127,22 +146,32 @@ class CredentialVault:
         token_data: dict[str, Any],
         token_id: str | None = None,
     ) -> str:
-        """Encrypt and store an OAuth token bundle (access token, refresh token, expiry)."""
+        """Encrypt and store an OAuth token bundle, preserving existing refresh token if omitted."""
         token_id = token_id or f"tok_{uuid.uuid4().hex[:16]}"
         now = datetime.now(timezone.utc).isoformat()
 
-        # Calculate absolute expiration timestamp if expires_in is provided
-        expires_at = token_data.get("expires_at")
-        if expires_at is None and "expires_in" in token_data:
-            expires_at = time.time() + float(token_data["expires_in"])
+        # If updating an existing token and new refresh_token is omitted, preserve current
+        existing_refresh_token = None
+        if token_id:
+            try:
+                existing = self.get_oauth_token(token_id)
+                existing_refresh_token = existing.refresh_token
+            except CredentialNotFoundError:
+                pass
 
-        token_payload = {
-            "access_token": token_data.get("access_token", ""),
-            "refresh_token": token_data.get("refresh_token"),
-            "token_type": token_data.get("token_type", "Bearer"),
-        }
-        encrypted_tokens = self.cipher.encrypt(json.dumps(token_payload).encode("utf-8"))
-        scope = token_data.get("scope", "")
+        # Construct Authlib OAuth2Token
+        token_dict = dict(token_data)
+        if not token_dict.get("refresh_token") and existing_refresh_token:
+            token_dict["refresh_token"] = existing_refresh_token
+
+        authlib_token = OAuth2Token(token_dict)
+        expires_at = authlib_token.get("expires_at")
+        if expires_at is None and "expires_in" in authlib_token:
+            expires_at = time.time() + float(authlib_token["expires_in"])
+            authlib_token["expires_at"] = expires_at
+
+        encrypted_tokens = self.cipher.encrypt(json.dumps(dict(authlib_token)).encode("utf-8"))
+        scope = authlib_token.get("scope", "")
 
         with self.db_manager.connection() as conn:
             conn.execute(
@@ -167,17 +196,14 @@ class CredentialVault:
                 raise CredentialNotFoundError(f"OAuth token '{token_id}' not found")
 
             decrypted_bytes = self.cipher.decrypt(bytes(row["encrypted_tokens"]))
-            token_payload = json.loads(decrypted_bytes.decode("utf-8"))
+            raw_token = json.loads(decrypted_bytes.decode("utf-8"))
+            authlib_token = OAuth2Token(raw_token)
 
             return OAuthTokenRecord(
                 id=row["id"],
                 channel=row["channel"],
                 client_id=row["client_id"],
-                access_token=token_payload["access_token"],
-                refresh_token=token_payload.get("refresh_token"),
-                token_type=token_payload.get("token_type", "Bearer"),
-                scope=row["scope"],
-                expires_at=row["expires_at"],
+                token=authlib_token,
                 created_at=row["created_at"],
                 updated_at=row["updated_at"],
             )
@@ -191,6 +217,9 @@ class CredentialVault:
         current = self.get_oauth_token(token_id)
         if not current.is_expired:
             return current
+
+        if not current.refresh_token:
+            raise TokenExpiredError(f"OAuth token '{token_id}' is expired and has no refresh token")
 
         # Single-flight deduplication key per token record to prevent refresh stampedes
         async def _do_refresh() -> OAuthTokenRecord:
@@ -230,3 +259,4 @@ class CredentialVault:
                 """,
                 (event_type, agent_id, channel, status, now, details_json),
             )
+

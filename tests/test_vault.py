@@ -113,6 +113,34 @@ async def test_concurrent_oauth_refresh_stampede_protection(vault: CredentialVau
         assert rec.is_expired is False
 
 
+def test_refresh_token_retained_if_omitted_in_update(vault: CredentialVault):
+    token_id = vault.store_oauth_token(
+        channel="github",
+        client_id="gh_client",
+        token_data={
+            "access_token": "init_access_token",
+            "refresh_token": "long_lived_refresh_token",
+            "expires_in": 3600
+        }
+    )
+    
+    # Update with new access token, but omitting refresh_token (RFC 6749 §5.1)
+    vault.store_oauth_token(
+        channel="github",
+        client_id="gh_client",
+        token_data={
+            "access_token": "new_access_token_only",
+            "expires_in": 3600
+        },
+        token_id=token_id
+    )
+    
+    updated = vault.get_oauth_token(token_id)
+    assert updated.access_token == "new_access_token_only"
+    # Crucial: original refresh token must NOT be lost/clobbered
+    assert updated.refresh_token == "long_lived_refresh_token"
+
+
 def test_audit_log_recorded(vault: CredentialVault):
     vault.record_audit_event(
         event_type="token_accessed",
@@ -129,3 +157,4 @@ def test_audit_log_recorded(vault: CredentialVault):
         assert row["status"] == "success"
         details = json.loads(row["details_json"])
         assert details["action"] == "slack_post_message"
+

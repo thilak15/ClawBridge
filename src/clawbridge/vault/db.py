@@ -51,6 +51,18 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 
 CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp);
+
+CREATE TABLE IF NOT EXISTS webhook_events (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    delivery_id TEXT UNIQUE,
+    payload_json TEXT NOT NULL,
+    status TEXT NOT NULL,
+    received_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_webhook_events_channel ON webhook_events(channel);
+CREATE INDEX IF NOT EXISTS idx_webhook_events_delivery_id ON webhook_events(delivery_id);
 """
 
 MIGRATIONS = [
@@ -129,3 +141,4 @@ class DatabaseManager:
             raise
         finally:
             conn.close()
+

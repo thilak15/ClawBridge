@@ -41,3 +41,4 @@ class SingleFlightGroup:
         finally:
             async with self._lock:
                 self._in_flight.pop(key, None)
+

@@ -56,3 +56,4 @@ def test_derive_key_from_passphrase():
     
     cipher2 = EnvelopeCipher.from_passphrase("master-vault-password-2026")
     assert cipher2.decrypt(ciphertext) == b"passphrase-protected"
+

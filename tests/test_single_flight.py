@@ -70,3 +70,4 @@ async def test_single_flight_cleans_up_and_allows_subsequent_calls():
     second_res = await group.execute("key1", refresh_op)
     assert second_res == "result_2"
     assert call_count == 2
+
