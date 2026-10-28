@@ -357,8 +357,12 @@ func (o *Orchestrator) executeTask(ctx context.Context, agt *RunningAgent, task 
 		Tools:        availableTools,
 	}
 
-	// Multi-turn tool execution loop
-	for turn := 0; turn < 5; turn++ {
+	// Multi-turn tool execution loop with Evaluate-and-Repair reflection protocol
+	const maxTurns = 10
+	const maxRepairRetries = 3
+	repairCount := 0
+
+	for turn := 0; turn < maxTurns; turn++ {
 		resp, err := o.llmClient.Chat(ctx, req)
 		if err != nil {
 			o.Log(ColorRed, agt.Config.Name, fmt.Sprintf("LLM error: %v", err))
@@ -390,7 +394,7 @@ func (o *Orchestrator) executeTask(ctx context.Context, agt *RunningAgent, task 
 				toolMsg := llm.Message{
 					Role:       "tool",
 					ToolCallID: call.ID,
-					Content:    fmt.Sprintf(`{"error":"%s"}`, errMsg),
+					Content:    fmt.Sprintf(`{"status":"error","recoverable":false,"error":"%s"}`, errMsg),
 				}
 				agt.Memory.AddMessage(toolMsg)
 				req.Messages = append(req.Messages, toolMsg)
@@ -400,9 +404,47 @@ func (o *Orchestrator) executeTask(ctx context.Context, agt *RunningAgent, task 
 			o.Log(agt.ColorCode, agt.Config.Name, fmt.Sprintf("Calling tool '%s' with args %v", call.Name, call.Arguments))
 			res, err := o.tools.CallTool(ctx, call.Name, call.Arguments)
 			var resStr string
+
+			isError := false
+			var errDetails string
 			if err != nil {
+				isError = true
+				errDetails = err.Error()
 				o.Log(ColorRed, agt.Config.Name, fmt.Sprintf("Tool error: %v", err))
-				resStr = fmt.Sprintf(`{"status":"error","message":"%s"}`, err.Error())
+			} else if res != nil && res.StatusCode >= 400 {
+				isError = true
+				errDetails = fmt.Sprintf("HTTP %d (%s)", res.StatusCode, res.Status)
+				o.Log(ColorRed, agt.Config.Name, fmt.Sprintf("Tool returned failure status: %s", errDetails))
+			}
+
+			if isError {
+				recoverable := isErrorRecoverable(errDetails)
+				if recoverable && repairCount < maxRepairRetries {
+					repairCount++
+					o.Log(ColorYellow, agt.Config.Name, fmt.Sprintf("[Self-Correction %d/%d] Tool '%s' failed (%s). Prompting agent to repair parameters and retry...", repairCount, maxRepairRetries, call.Name, errDetails))
+					resMap := map[string]any{
+						"status":         "error",
+						"recoverable":    true,
+						"repair_attempt": repairCount,
+						"max_attempts":   maxRepairRetries,
+						"tool":           call.Name,
+						"error":          errDetails,
+						"directive":      "Evaluate the failure, inspect required parameter schemas, correct the arguments, and retry.",
+					}
+					b, _ := json.Marshal(resMap)
+					resStr = string(b)
+				} else {
+					o.Log(ColorRed, agt.Config.Name, fmt.Sprintf("[Self-Correction Exhausted] Tool '%s' reached max retries or unrecoverable error: %s", call.Name, errDetails))
+					resMap := map[string]any{
+						"status":      "error",
+						"recoverable": false,
+						"tool":        call.Name,
+						"error":       errDetails,
+						"directive":   "Unrecoverable error or max retries reached. Report failure or escalate to human operator.",
+					}
+					b, _ := json.Marshal(resMap)
+					resStr = string(b)
+				}
 			} else {
 				b, _ := json.Marshal(res)
 				resStr = string(b)
@@ -444,4 +486,13 @@ func toolNameToChannelAction(toolName string) (string, string) {
 		}
 		return toolName, "*"
 	}
+}
+
+func isErrorRecoverable(errStr string) bool {
+	lower := strings.ToLower(errStr)
+	if strings.Contains(lower, "401") || strings.Contains(lower, "unauthorized") ||
+		strings.Contains(lower, "permission denied") || strings.Contains(lower, "forbidden") {
+		return false
+	}
+	return true
 }

@@ -3,6 +3,9 @@ package runner_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +14,10 @@ import (
 
 	"clawbridge/pkg/agents"
 	"clawbridge/pkg/auth"
+	"clawbridge/pkg/dispatch"
 	"clawbridge/pkg/inbound"
+	"clawbridge/pkg/llm"
+	"clawbridge/pkg/mcp"
 	"clawbridge/pkg/runner"
 	"clawbridge/pkg/vault"
 )
@@ -229,6 +235,157 @@ func TestOrchestrator_ToolPermissionsEnforcement(t *testing.T) {
 	mem := orch.GetAgentMemory("nemoclaw")
 	if mem == nil || mem.Count() == 0 {
 		t.Fatalf("expected memory turns for nemoclaw")
+	}
+
+	orch.StopAll()
+}
+
+func TestOrchestrator_EvaluateAndRepairLoop(t *testing.T) {
+	reg, agentsDir, cleanup := setupTestEnvironment(t)
+	defer cleanup()
+
+	// 1. Setup mock downstream Slack server that fails on bad channel, succeeds on good channel
+	slackCalls := 0
+	slackServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		slackCalls++
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+
+		if body["channel"] == "bad_channel" {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "channel_not_found"})
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "ts": "123.456"})
+	}))
+	defer slackServer.Close()
+
+	// 2. Setup mock LLM server: Turn 1 produces bad call, Turn 2 repairs call, Turn 3 concludes
+	llmTurns := 0
+	llmServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		llmTurns++
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+
+		if llmTurns == 1 {
+			// Turn 1: Try with invalid channel
+			argsJSON, _ := json.Marshal(map[string]any{
+				"channel_id": "bad_channel",
+				"text":       "Message attempt 1",
+				"url":        slackServer.URL,
+			})
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"choices": []map[string]any{
+					{
+						"message": map[string]any{
+							"role": "assistant",
+							"tool_calls": []map[string]any{
+								{
+									"id":   "call_001",
+									"type": "function",
+									"function": map[string]any{
+										"name":      "slack_post_message",
+										"arguments": string(argsJSON),
+									},
+								},
+							},
+						},
+					},
+				},
+			})
+			return
+		}
+
+		if llmTurns == 2 {
+			// Turn 2: LLM received error with directive, corrects to valid channel
+			argsJSON, _ := json.Marshal(map[string]any{
+				"channel_id": "C_VALID_123",
+				"text":       "Message attempt 2 repaired",
+				"url":        slackServer.URL,
+			})
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"choices": []map[string]any{
+					{
+						"message": map[string]any{
+							"role": "assistant",
+							"tool_calls": []map[string]any{
+								{
+									"id":   "call_002",
+									"type": "function",
+									"function": map[string]any{
+										"name":      "slack_post_message",
+										"arguments": string(argsJSON),
+									},
+								},
+							},
+						},
+					},
+				},
+			})
+			return
+		}
+
+		// Turn 3: Final confirmation
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{
+					"message": map[string]any{
+						"role":    "assistant",
+						"content": "Successfully repaired arguments and posted to Slack.",
+					},
+				},
+			},
+		})
+	}))
+	defer llmServer.Close()
+
+	llmClient := llm.NewClient(llm.ClientConfig{
+		Provider:   llm.ProviderOpenAI,
+		APIKey:     "test-key",
+		BaseURL:    llmServer.URL,
+		HTTPClient: llmServer.Client(),
+	})
+
+	// Setup tools with EgressDispatcher
+	key, _ := vault.GenerateKey()
+	cipher, _ := vault.NewEnvelopeCipher(key)
+	credVault := vault.NewCredentialVault(reg.DatabaseManager(), cipher)
+	limiter := dispatch.NewTokenBucketLimiter(nil)
+	dispatcher := dispatch.NewEgressDispatcher(credVault, limiter, slackServer.Client())
+	tools := mcp.NewTools(dispatcher, nil, nil)
+
+	outBuf := &bytes.Buffer{}
+	orch := runner.NewOrchestrator(agentsDir, reg, llmClient, tools, nil, outBuf)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := orch.StartAgent(ctx, "nemoclaw"); err != nil {
+		t.Fatalf("failed to start agent: %v", err)
+	}
+
+	if err := orch.DispatchTask("nemoclaw", "Post update to team Slack"); err != nil {
+		t.Fatalf("failed to dispatch task: %v", err)
+	}
+
+	// Wait for multi-turn repair execution to complete
+	time.Sleep(150 * time.Millisecond)
+
+	mem := orch.GetAgentMemory("nemoclaw")
+	if mem == nil {
+		t.Fatalf("expected memory for agent")
+	}
+
+	// Verify that logs or memory show the self-correction attempt
+	logOutput := outBuf.String()
+	if !strings.Contains(logOutput, "[Self-Correction 1/3]") {
+		t.Errorf("expected logs to contain [Self-Correction 1/3], got:\n%s", logOutput)
+	}
+
+	if slackCalls != 2 {
+		t.Errorf("expected 2 calls to Slack (1 fail, 1 repaired success), got %d", slackCalls)
 	}
 
 	orch.StopAll()

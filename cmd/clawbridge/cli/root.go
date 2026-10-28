@@ -421,7 +421,15 @@ func runOrchestratorConsole(app *AppContext, agentNames []string, in io.Reader, 
 	}
 
 	// Launch console REPL
-	err := runner.RunConsole(ctx, in, out, orch, app.Broadcaster)
+	err := runner.RunConsoleWithConfig(ctx, runner.ConsoleConfig{
+		In:           in,
+		Out:          out,
+		Orchestrator: orch,
+		Broadcaster:  app.Broadcaster,
+		Vault:        app.Vault,
+		Registry:     app.Registry,
+		AgentsDir:    app.AgentsDir,
+	})
 	orch.StopAll()
 	if err != nil {
 		fmt.Fprintf(errOut, "Console exited: %v\n", err)
