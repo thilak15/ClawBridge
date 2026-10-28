@@ -30,6 +30,14 @@ ClawBridge decouples agent intelligence from credentials using a Zero-Trust arch
 5. **Auto-Pruned Sliding Context Window:** Retains exactly the last 15 conversation turns per agent in memory, permanently capping RAM usage under 15MB regardless of how long agents run.
 6. **24/7 Daemon Architecture:** Native OS background service management (`launchd` on macOS, `systemd` on Linux), supervisor watchdog with 2-second panic auto-restart, proactive 10-minute token refresher, sleep/wake network jump recovery, and 10MB x 3 file log rotation.
 
+### How Multiple Agents Share Connectors (Universal Connectivity)
+
+- **One Setup for All Apps:** You configure your Slack bot token, Jira credentials, Twitter API keys, Discord bot token, and GitHub personal access token in ClawBridge once. You never have to configure those apps inside individual agents.
+- **Universal Multi-Tasking:** Every agent is general-purpose and can connect to any integrated application to perform any task, individually or simultaneously.
+- **Coordinated Rate Limiting Across Agents:** If NemoClaw and OpenClaw both try to send messages to Slack simultaneously, ClawBridge queues and paces them so they share the platform quota without triggering downstream rate-limit bans.
+- **Shared Background Token Refreshes:** When an OAuth token expires, ClawBridge refreshes it once behind the scenes using single-flight deduplication. Neither agent experiences interruption; their requests continue to work uninterrupted.
+- **Shared Inbound Event Switchboard:** When an inbound webhook arrives from Slack, Jira, or GitHub, ClawBridge cryptographically verifies HMAC signatures and routes the event directly to subscribed agents.
+
 ---
 
 ## Architecture
