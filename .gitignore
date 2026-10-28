@@ -1,11 +1,4 @@
 .DS_Store
-.preflight/
-blueprint_report.html
-preflight/
-.venv/
-__pycache__/
-*.pyc
-.pytest_cache/
 bin/
 dist/
 *.db

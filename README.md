@@ -342,9 +342,6 @@ Run the full automated test suite:
 ```bash
 # Run all Go unit, integration, and E2E tests
 make test
-
-# Run legacy Python test harness
-uv run pytest
 ```
 
 ---
