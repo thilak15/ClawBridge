@@ -129,6 +129,30 @@ func TestRunConnectWizard_AppMenuSelection(t *testing.T) {
 	}
 }
 
+func TestRunConnectWizard_Gemini(t *testing.T) {
+	v, _, cleanup := setupTestVault(t)
+	defer cleanup()
+	defer os.Remove(".env")
+
+	// Select 6 (Gemini), then enter AQ key
+	input := "6\nAQ.Ab8RN123456789\n"
+	in := strings.NewReader(input)
+	out := &bytes.Buffer{}
+
+	err := wizard.RunConnectWizard(in, out, v, "")
+	if err != nil {
+		t.Fatalf("unexpected error running gemini connect wizard: %v", err)
+	}
+
+	cred, err := v.GetCredentialByChannel("gemini")
+	if err != nil {
+		t.Fatalf("failed to retrieve gemini credential: %v", err)
+	}
+	if cred.Data["key"] != "AQ.Ab8RN123456789" {
+		t.Errorf("unexpected gemini key data: %v", cred.Data)
+	}
+}
+
 func TestRunConfigWizard_FullAccessAndGranular(t *testing.T) {
 	_, dbMgr, cleanup := setupTestVault(t)
 	defer cleanup()

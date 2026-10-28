@@ -69,3 +69,22 @@ func TestCLI_UnknownCommand(t *testing.T) {
 	}
 }
 
+func TestCLI_ConnectGemini(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("CLAWBRIDGE_HOME", tempDir)
+	defer os.Remove(".env")
+
+	in := strings.NewReader("AQ.Ab8RNAuthKeyTest\n")
+	out := &bytes.Buffer{}
+	errOut := &bytes.Buffer{}
+
+	code := cli.Execute([]string{"connect", "gemini"}, in, out, errOut)
+	if code != 0 {
+		t.Fatalf("expected code 0, got %d: %s", code, errOut.String())
+	}
+
+	if !strings.Contains(out.String(), "Successfully encrypted and stored Google Gemini credentials in vault") {
+		t.Errorf("unexpected output: %s", out.String())
+	}
+}
+

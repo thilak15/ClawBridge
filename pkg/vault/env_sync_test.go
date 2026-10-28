@@ -203,3 +203,61 @@ GITHUB_TOKEN=github_from_file_456
 	}
 }
 
+func TestAutoSyncEnv_LLMCredentialsAndSaveEnvVar(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "clawbridge-llm-sync-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "vault.db")
+	dbMgr, err := NewDatabaseManager(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dbMgr.Close()
+	_ = dbMgr.Initialize()
+
+	key, _ := GenerateKey()
+	cipher, _ := NewEnvelopeCipher(key)
+	v := NewCredentialVault(dbMgr, cipher)
+
+	envFile := filepath.Join(tmpDir, ".env")
+
+	// Test SaveEnvVar
+	if err := SaveEnvVar(envFile, "GEMINI_API_KEY", "AQ.TestAuthKey123"); err != nil {
+		t.Fatalf("failed to save env var: %v", err)
+	}
+	if err := SaveEnvVar(envFile, "OPENAI_API_KEY", "sk-proj-test-123"); err != nil {
+		t.Fatalf("failed to save env var: %v", err)
+	}
+
+	synced, err := AutoSyncEnv(v, envFile)
+	if err != nil {
+		t.Fatalf("unexpected error auto syncing: %v", err)
+	}
+
+	foundGemini := false
+	foundOpenAI := false
+	for _, s := range synced {
+		if s == "gemini" {
+			foundGemini = true
+		}
+		if s == "openai" {
+			foundOpenAI = true
+		}
+	}
+
+	if !foundGemini || !foundOpenAI {
+		t.Errorf("expected gemini and openai to be synced, got %v", synced)
+	}
+
+	geminiCred, err := v.GetCredentialByChannel("gemini")
+	if err != nil || geminiCred == nil {
+		t.Fatalf("failed to retrieve gemini cred: %v", err)
+	}
+	if geminiCred.Data["key"] != "AQ.TestAuthKey123" {
+		t.Errorf("expected 'AQ.TestAuthKey123', got %v", geminiCred.Data["key"])
+	}
+}
+

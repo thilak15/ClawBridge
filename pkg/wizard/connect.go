@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"clawbridge/pkg/vault"
@@ -32,7 +33,10 @@ func RunConnectWizard(in io.Reader, out io.Writer, v *vault.CredentialVault, tar
 		fmt.Fprintln(out, "3) Discord")
 		fmt.Fprintln(out, "4) Twitter / X")
 		fmt.Fprintln(out, "5) GitHub")
-		choice := prompt("Select an app to connect [1-5 or name]: ")
+		fmt.Fprintln(out, "6) Google Gemini (LLM)")
+		fmt.Fprintln(out, "7) OpenAI (LLM)")
+		fmt.Fprintln(out, "8) Anthropic Claude (LLM)")
+		choice := prompt("Select an app or LLM to connect [1-8 or name]: ")
 		app = normalizeAppName(choice)
 	}
 
@@ -125,6 +129,48 @@ func RunConnectWizard(in io.Reader, out io.Writer, v *vault.CredentialVault, tar
 		}
 		fmt.Fprintln(out, "Successfully encrypted and stored GitHub credentials in vault.")
 
+	case "gemini", "google":
+		fmt.Fprintln(out, "Connecting Google Gemini...")
+		key := prompt("Google Gemini API Key (starts with AIza... or AQ...): ")
+		if key == "" {
+			return fmt.Errorf("Gemini API key cannot be empty")
+		}
+		data := map[string]any{"key": key}
+		if _, err := v.UpsertCredentialByChannel("gemini", "api_key", data); err != nil {
+			return fmt.Errorf("failed to store gemini credential: %w", err)
+		}
+		_ = os.Setenv("GEMINI_API_KEY", key)
+		_ = vault.SaveEnvVar(".env", "GEMINI_API_KEY", key)
+		fmt.Fprintln(out, "Successfully encrypted and stored Google Gemini credentials in vault.")
+
+	case "openai":
+		fmt.Fprintln(out, "Connecting OpenAI...")
+		key := prompt("OpenAI API Key (starts with sk-...): ")
+		if key == "" {
+			return fmt.Errorf("OpenAI API key cannot be empty")
+		}
+		data := map[string]any{"key": key}
+		if _, err := v.UpsertCredentialByChannel("openai", "api_key", data); err != nil {
+			return fmt.Errorf("failed to store openai credential: %w", err)
+		}
+		_ = os.Setenv("OPENAI_API_KEY", key)
+		_ = vault.SaveEnvVar(".env", "OPENAI_API_KEY", key)
+		fmt.Fprintln(out, "Successfully encrypted and stored OpenAI credentials in vault.")
+
+	case "anthropic", "claude":
+		fmt.Fprintln(out, "Connecting Anthropic Claude...")
+		key := prompt("Anthropic API Key (starts with sk-ant-...): ")
+		if key == "" {
+			return fmt.Errorf("Anthropic API key cannot be empty")
+		}
+		data := map[string]any{"key": key}
+		if _, err := v.UpsertCredentialByChannel("anthropic", "api_key", data); err != nil {
+			return fmt.Errorf("failed to store anthropic credential: %w", err)
+		}
+		_ = os.Setenv("ANTHROPIC_API_KEY", key)
+		_ = vault.SaveEnvVar(".env", "ANTHROPIC_API_KEY", key)
+		fmt.Fprintln(out, "Successfully encrypted and stored Anthropic credentials in vault.")
+
 	default:
 		return fmt.Errorf("unsupported application: '%s'", app)
 	}
@@ -145,6 +191,12 @@ func normalizeAppName(input string) string {
 		return "twitter"
 	case "5", "github":
 		return "github"
+	case "6", "gemini", "google":
+		return "gemini"
+	case "7", "openai":
+		return "openai"
+	case "8", "anthropic", "claude":
+		return "anthropic"
 	default:
 		return clean
 	}

@@ -27,6 +27,27 @@ func TestClient_DetectProviderFromEnv(t *testing.T) {
 	}
 }
 
+func TestDetectProviderFromKey(t *testing.T) {
+	cases := []struct {
+		key      string
+		expected llm.ProviderType
+	}{
+		{"AIzaSyD-12345", llm.ProviderGemini},
+		{"AQ.Ab8RN1234567890", llm.ProviderGemini},
+		{"sk-proj-abcde12345", llm.ProviderOpenAI},
+		{"sk-123456789", llm.ProviderOpenAI},
+		{"sk-ant-api03-12345", llm.ProviderAnthropic},
+		{"random-token-xyz", ""},
+	}
+
+	for _, c := range cases {
+		got := llm.DetectProviderFromKey(c.key)
+		if got != c.expected {
+			t.Errorf("for key %q expected %v, got %v", c.key, c.expected, got)
+		}
+	}
+}
+
 func TestClient_OpenAIChatCompletion(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer test-openai-key" {

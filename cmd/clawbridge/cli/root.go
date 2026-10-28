@@ -100,6 +100,29 @@ func InitAppContext(baseDir string) (*AppContext, error) {
 	// 3. Auto-sync .env file
 	_, _ = vault.AutoSyncEnv(credVault, ".env")
 
+	// Check if vault has LLM credentials if not already set in environment
+	if os.Getenv("GEMINI_API_KEY") == "" {
+		if cred, err := credVault.GetCredentialByChannel("gemini"); err == nil && cred != nil {
+			if k, ok := cred.Data["key"].(string); ok && k != "" {
+				_ = os.Setenv("GEMINI_API_KEY", k)
+			}
+		}
+	}
+	if os.Getenv("OPENAI_API_KEY") == "" {
+		if cred, err := credVault.GetCredentialByChannel("openai"); err == nil && cred != nil {
+			if k, ok := cred.Data["key"].(string); ok && k != "" {
+				_ = os.Setenv("OPENAI_API_KEY", k)
+			}
+		}
+	}
+	if os.Getenv("ANTHROPIC_API_KEY") == "" {
+		if cred, err := credVault.GetCredentialByChannel("anthropic"); err == nil && cred != nil {
+			if k, ok := cred.Data["key"].(string); ok && k != "" {
+				_ = os.Setenv("ANTHROPIC_API_KEY", k)
+			}
+		}
+	}
+
 	// 4. Agents directory
 	agentsDir := "agents"
 	if _, err := os.Stat(agentsDir); os.IsNotExist(err) {
@@ -242,6 +265,19 @@ func runDefaultOrQuickstart(in io.Reader, out io.Writer, errOut io.Writer) int {
 		}
 	}
 
+	// Check if any LLM credentials exist
+	hasLLM := os.Getenv("GEMINI_API_KEY") != "" || os.Getenv("GOOGLE_API_KEY") != "" ||
+		os.Getenv("OPENAI_API_KEY") != "" || os.Getenv("ANTHROPIC_API_KEY") != "" ||
+		os.Getenv("OLLAMA_HOST") != ""
+	if !hasLLM {
+		for _, ch := range []string{"gemini", "openai", "anthropic"} {
+			if cred, err := app.Vault.GetCredentialByChannel(ch); err == nil && cred != nil {
+				hasLLM = true
+				break
+			}
+		}
+	}
+
 	scanner := bufio.NewScanner(in)
 	prompt := func(msg string) string {
 		fmt.Fprint(out, msg)
@@ -251,21 +287,91 @@ func runDefaultOrQuickstart(in io.Reader, out io.Writer, errOut io.Writer) int {
 		return strings.TrimSpace(scanner.Text())
 	}
 
-	// If no credentials and no API key in environment, run quickstart onboarding
-	if !hasCreds && os.Getenv("GEMINI_API_KEY") == "" && os.Getenv("OPENAI_API_KEY") == "" {
+	// If no LLM credentials configured, prompt user to select their LLM provider
+	if !hasLLM {
 		fmt.Fprintln(out, Banner)
 		fmt.Fprintln(out, "\nWelcome to ClawBridge! Let's get your agents set up in 30 seconds.")
+		fmt.Fprintln(out, "\nStep 1: Choose your LLM Provider:")
+		fmt.Fprintln(out, "  1) Google Gemini (Recommended - free tier at aistudio.google.com)")
+		fmt.Fprintln(out, "  2) OpenAI (GPT-4o / GPT-4o-mini)")
+		fmt.Fprintln(out, "  3) Anthropic Claude (Claude 3.5 Haiku / Sonnet)")
+		fmt.Fprintln(out, "  4) Local Ollama (offline local model)")
+		fmt.Fprintln(out, "  5) Skip / Offline mode")
+		fmt.Fprintln(out, "")
 
-		apiKey := prompt("\nEnter Gemini or OpenAI API Key [press enter to run offline]: ")
-		if apiKey != "" {
-			if strings.HasPrefix(apiKey, "AIza") {
-				_ = os.Setenv("GEMINI_API_KEY", apiKey)
-			} else {
-				_ = os.Setenv("OPENAI_API_KEY", apiKey)
-			}
-			app.LLMClient = llm.NewClientFromEnv(nil)
+		choice := prompt("Select provider [1-5, default 1]: ")
+		if choice == "" {
+			choice = "1"
 		}
 
+		// Check if user directly pasted an API key
+		detected := llm.DetectProviderFromKey(choice)
+		if detected != "" {
+			switch detected {
+			case llm.ProviderGemini:
+				_ = os.Setenv("GEMINI_API_KEY", choice)
+				_ = vault.SaveEnvVar(".env", "GEMINI_API_KEY", choice)
+				_, _ = app.Vault.UpsertCredentialByChannel("gemini", "api_key", map[string]any{"key": choice})
+				fmt.Fprintln(out, "Detected Google Gemini key. Configured successfully.")
+			case llm.ProviderOpenAI:
+				_ = os.Setenv("OPENAI_API_KEY", choice)
+				_ = vault.SaveEnvVar(".env", "OPENAI_API_KEY", choice)
+				_, _ = app.Vault.UpsertCredentialByChannel("openai", "api_key", map[string]any{"key": choice})
+				fmt.Fprintln(out, "Detected OpenAI key. Configured successfully.")
+			case llm.ProviderAnthropic:
+				_ = os.Setenv("ANTHROPIC_API_KEY", choice)
+				_ = vault.SaveEnvVar(".env", "ANTHROPIC_API_KEY", choice)
+				_, _ = app.Vault.UpsertCredentialByChannel("anthropic", "api_key", map[string]any{"key": choice})
+				fmt.Fprintln(out, "Detected Anthropic key. Configured successfully.")
+			}
+			app.LLMClient = llm.NewClientFromEnv(nil)
+		} else {
+			switch choice {
+			case "1", "gemini", "google":
+				key := prompt("\nEnter Google Gemini API Key (starts with AIza... or AQ...): ")
+				if key != "" {
+					_ = os.Setenv("GEMINI_API_KEY", key)
+					_ = vault.SaveEnvVar(".env", "GEMINI_API_KEY", key)
+					_, _ = app.Vault.UpsertCredentialByChannel("gemini", "api_key", map[string]any{"key": key})
+					app.LLMClient = llm.NewClientFromEnv(nil)
+					fmt.Fprintln(out, "Configured Google Gemini successfully.")
+				}
+			case "2", "openai":
+				key := prompt("\nEnter OpenAI API Key (starts with sk-...): ")
+				if key != "" {
+					_ = os.Setenv("OPENAI_API_KEY", key)
+					_ = vault.SaveEnvVar(".env", "OPENAI_API_KEY", key)
+					_, _ = app.Vault.UpsertCredentialByChannel("openai", "api_key", map[string]any{"key": key})
+					app.LLMClient = llm.NewClientFromEnv(nil)
+					fmt.Fprintln(out, "Configured OpenAI successfully.")
+				}
+			case "3", "anthropic", "claude":
+				key := prompt("\nEnter Anthropic API Key (starts with sk-ant-...): ")
+				if key != "" {
+					_ = os.Setenv("ANTHROPIC_API_KEY", key)
+					_ = vault.SaveEnvVar(".env", "ANTHROPIC_API_KEY", key)
+					_, _ = app.Vault.UpsertCredentialByChannel("anthropic", "api_key", map[string]any{"key": key})
+					app.LLMClient = llm.NewClientFromEnv(nil)
+					fmt.Fprintln(out, "Configured Anthropic Claude successfully.")
+				}
+			case "4", "ollama":
+				host := prompt("\nEnter Ollama Host URL [default: http://localhost:11434]: ")
+				if host == "" {
+					host = "http://localhost:11434"
+				}
+				_ = os.Setenv("OLLAMA_HOST", host)
+				_ = vault.SaveEnvVar(".env", "OLLAMA_HOST", host)
+				_, _ = app.Vault.UpsertCredentialByChannel("ollama", "host", map[string]any{"url": host})
+				app.LLMClient = llm.NewClientFromEnv(nil)
+				fmt.Fprintln(out, "Configured Local Ollama successfully.")
+			default:
+				fmt.Fprintln(out, "Running in offline mode (LLM disabled).")
+			}
+		}
+	}
+
+	// If no app credentials, prompt to connect apps
+	if !hasCreds {
 		wantConnect := prompt("\nWould you like to connect an app (Slack, Jira, Discord, Twitter, GitHub)? [y/N]: ")
 		if strings.EqualFold(wantConnect, "y") || strings.EqualFold(wantConnect, "yes") {
 			_ = wizard.RunConnectWizard(in, out, app.Vault, "")

@@ -20,9 +20,27 @@ type Client struct {
 	client HTTPDoer
 }
 
+// DetectProviderFromKey determines the provider type from known key prefix formats.
+func DetectProviderFromKey(key string) ProviderType {
+	k := strings.TrimSpace(key)
+	if strings.HasPrefix(k, "AIza") || strings.HasPrefix(k, "AQ.") || strings.HasPrefix(k, "AQ") {
+		return ProviderGemini
+	}
+	if strings.HasPrefix(k, "sk-ant-") {
+		return ProviderAnthropic
+	}
+	if strings.HasPrefix(k, "sk-") {
+		return ProviderOpenAI
+	}
+	return ""
+}
+
 // DetectProviderFromEnv inspects environment variables to choose the best available LLM provider.
 func DetectProviderFromEnv() (ProviderType, string, string) {
 	if key := os.Getenv("GEMINI_API_KEY"); key != "" {
+		return ProviderGemini, key, "gemini-1.5-flash"
+	}
+	if key := os.Getenv("GOOGLE_API_KEY"); key != "" {
 		return ProviderGemini, key, "gemini-1.5-flash"
 	}
 	if key := os.Getenv("OPENAI_API_KEY"); key != "" {
@@ -118,8 +136,16 @@ func (c *Client) chatOpenAI(ctx context.Context, req ChatRequest) (*ChatResponse
 		openAIMessages = append(openAIMessages, msgMap)
 	}
 
+	model := req.Model
+	if model == "" || strings.HasPrefix(model, "gemini") || strings.HasPrefix(model, "claude-") {
+		model = c.config.Model
+	}
+	if model == "" {
+		model = "gpt-4o-mini"
+	}
+
 	payload := map[string]any{
-		"model":    req.Model,
+		"model":    model,
 		"messages": openAIMessages,
 	}
 
@@ -207,6 +233,14 @@ func (c *Client) chatOpenAI(ctx context.Context, req ChatRequest) (*ChatResponse
 }
 
 func (c *Client) chatGemini(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
+	model := req.Model
+	if model == "" || strings.HasPrefix(model, "gpt-") || strings.HasPrefix(model, "claude-") {
+		model = c.config.Model
+	}
+	if model == "" {
+		model = "gemini-1.5-flash"
+	}
+
 	baseURL := c.config.BaseURL
 	var endpoint string
 	if baseURL != "" {
@@ -214,7 +248,7 @@ func (c *Client) chatGemini(ctx context.Context, req ChatRequest) (*ChatResponse
 	} else {
 		endpoint = fmt.Sprintf(
 			"https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent",
-			req.Model,
+			model,
 		)
 	}
 
@@ -225,16 +259,29 @@ func (c *Client) chatGemini(ctx context.Context, req ChatRequest) (*ChatResponse
 			role = "model"
 		}
 		var parts []map[string]any
-		if m.Content != "" {
-			parts = append(parts, map[string]any{"text": m.Content})
-		}
-		for _, tc := range m.ToolCalls {
+		if m.Role == "tool" {
+			var respMap map[string]any
+			if err := json.Unmarshal([]byte(m.Content), &respMap); err != nil {
+				respMap = map[string]any{"output": m.Content}
+			}
 			parts = append(parts, map[string]any{
-				"functionCall": map[string]any{
-					"name": tc.Name,
-					"args": tc.Arguments,
+				"functionResponse": map[string]any{
+					"name":     m.ToolCallID,
+					"response": respMap,
 				},
 			})
+		} else {
+			if m.Content != "" {
+				parts = append(parts, map[string]any{"text": m.Content})
+			}
+			for _, tc := range m.ToolCalls {
+				parts = append(parts, map[string]any{
+					"functionCall": map[string]any{
+						"name": tc.Name,
+						"args": tc.Arguments,
+					},
+				})
+			}
 		}
 		contents = append(contents, map[string]any{
 			"role":  role,
