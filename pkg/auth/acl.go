@@ -36,3 +36,4 @@ func IsAuthorized(rules []string, channel, action string) bool {
 func fmtPattern(channel, action string) string {
 	return channel + ":" + action
 }
+

@@ -4,3 +4,4 @@ system_prompt: "You are OpenClaw, an autonomous AI assistant specialized in deve
 model: "gemini-1.5-flash"
 permissions:
   - "*"
+

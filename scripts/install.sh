@@ -51,3 +51,4 @@ fi
 chmod +x "${INSTALL_DIR}/clawbridge"
 echo "Successfully installed ClawBridge to ${INSTALL_DIR}/clawbridge"
 "${INSTALL_DIR}/clawbridge" --version
+

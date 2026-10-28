@@ -175,3 +175,4 @@ func UninstallService() error {
 		return fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
 	}
 }
+

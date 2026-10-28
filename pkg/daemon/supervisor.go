@@ -87,3 +87,4 @@ func (s *Supervisor) PanicCount(name string) int {
 	defer s.mu.RUnlock()
 	return s.panicCounts[name]
 }
+

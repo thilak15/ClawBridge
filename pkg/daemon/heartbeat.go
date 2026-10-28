@@ -90,3 +90,4 @@ func (d *SleepWakeDetector) Start(ctx context.Context) {
 		}
 	}()
 }
+

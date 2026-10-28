@@ -27,3 +27,4 @@ func VerifyAgentToken(rawToken, tokenHash string) bool {
 	computedHex := hex.EncodeToString(hash[:])
 	return hmac.Equal([]byte(computedHex), []byte(tokenHash))
 }
+

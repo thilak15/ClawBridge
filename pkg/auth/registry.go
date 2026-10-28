@@ -186,3 +186,4 @@ func (r *AgentRegistry) ListAgents() ([]*AgentRecord, error) {
 
 	return agents, nil
 }
+

@@ -68,3 +68,4 @@ func TestCLI_UnknownCommand(t *testing.T) {
 		t.Errorf("expected unknown command error, got: %s", errOut.String())
 	}
 }
+

@@ -41,3 +41,4 @@ done
 
 echo "Build complete. Artifacts in ${OUTPUT_DIR}/:"
 ls -lh "$OUTPUT_DIR"
+

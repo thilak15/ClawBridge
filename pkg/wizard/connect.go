@@ -149,3 +149,4 @@ func normalizeAppName(input string) string {
 		return clean
 	}
 }
+

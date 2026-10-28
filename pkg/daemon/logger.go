@@ -145,3 +145,4 @@ func StartWALCheckpointer(ctx context.Context, dbMgr *vault.DatabaseManager, int
 		}
 	}()
 }
+

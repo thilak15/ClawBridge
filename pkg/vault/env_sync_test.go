@@ -202,3 +202,4 @@ GITHUB_TOKEN=github_from_file_456
 		t.Errorf("expected discord_from_file_123, got %v", discordCred.Data["token"])
 	}
 }
+

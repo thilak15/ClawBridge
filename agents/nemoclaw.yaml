@@ -4,3 +4,4 @@ system_prompt: "You are NemoClaw, an autonomous AI assistant with universal acce
 model: "gemini-1.5-flash"
 permissions:
   - "*"
+

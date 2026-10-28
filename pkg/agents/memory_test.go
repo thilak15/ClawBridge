@@ -61,3 +61,4 @@ func TestSlidingMemory_SetMessagesPruning(t *testing.T) {
 		t.Errorf("unexpected pruned messages: %v", msgs)
 	}
 }
+

@@ -198,3 +198,4 @@ func AutoSyncEnv(v *CredentialVault, envFilePath string) ([]string, error) {
 
 	return SyncEnvVars(v, combined)
 }
+

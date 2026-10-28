@@ -17,3 +17,4 @@ clean:
 
 install: build
 	@./scripts/install.sh
+

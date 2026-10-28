@@ -118,3 +118,4 @@ func RunConfigWizard(in io.Reader, out io.Writer, registry *auth.AgentRegistry, 
 	fmt.Fprintf(out, "Updated permissions for '%s': [%s]\n", selectedAgent.Name, rulesDisplay)
 	return nil
 }
+

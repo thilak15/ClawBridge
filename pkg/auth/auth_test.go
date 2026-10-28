@@ -136,3 +136,4 @@ func TestAgentRegistry_RegisterAndLookup(t *testing.T) {
 		t.Fatalf("expected 2 updated rules, got %d", len(updated.AllowedRules))
 	}
 }
+

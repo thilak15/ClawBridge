@@ -86,3 +86,4 @@ func (m *SlidingMemory) Clear() {
 	defer m.mu.Unlock()
 	m.messages = make([]llm.Message, 0, m.maxTurns)
 }
+

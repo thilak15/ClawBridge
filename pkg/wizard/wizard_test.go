@@ -186,3 +186,4 @@ func TestRunConfigWizard_FullAccessAndGranular(t *testing.T) {
 		t.Errorf("expected updated permissions in openclaw.yaml, got %v", cfgs[0].Permissions)
 	}
 }
+
