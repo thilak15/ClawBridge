@@ -76,3 +76,4 @@ def test_normalize_internal_rate_limit_exception():
     assert receipt.code == "RATE_LIMITED"
     assert receipt.retry_after_s == 2.5
     assert receipt.retryable is True
+

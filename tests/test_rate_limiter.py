@@ -68,3 +68,4 @@ def test_channel_isolation():
     # ch2 is unaffected and still available
     assert limiter.is_available("ch2") is True
     limiter.acquire("ch2")
+

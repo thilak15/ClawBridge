@@ -120,3 +120,4 @@ async def test_dispatch_handles_downstream_429_and_pauses_rate_limiter(test_env)
     
     # Verify limiter recorded downstream throttle
     assert limiter.is_available("twitter") is False
+

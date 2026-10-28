@@ -110,3 +110,4 @@ class TokenBucketLimiter:
                 raise RateLimitExceededError(retry_after_s=wait_time, channel=channel)
 
             state.tokens -= cost
+

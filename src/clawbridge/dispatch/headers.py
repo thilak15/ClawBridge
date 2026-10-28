@@ -45,3 +45,4 @@ class HeaderInjector:
             out["Authorization"] = f"Bearer {payload['bearer_token']}"
 
         return out
+
