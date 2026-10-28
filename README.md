@@ -162,8 +162,8 @@ clawbridge
 ```
 
 ClawBridge will automatically:
-1. Detect or prompt for your LLM API Key (`GEMINI_API_KEY` or `OPENAI_API_KEY`).
-2. Offer to connect your first integration (Slack, Jira, Discord, Twitter, or GitHub).
+1. Detect or prompt you to select your LLM Provider (Google Gemini, OpenAI, Anthropic Claude, or local Ollama). Supports both Google AI Studio auth keys (`AQ...`) and standard keys (`AIza...`).
+2. Offer to connect your first app integration (Slack, Jira, Discord, Twitter, or GitHub).
 3. Initialize built-in agents (`nemoclaw` and `openclaw`).
 4. Launch the interactive multi-agent console.
 
@@ -199,21 +199,23 @@ clawbridge> broadcast: Prepare weekly synchronization report
 
 ### Connector Wizard
 
-Connect platforms step-by-step with automatic encryption into the local vault:
+Connect platforms and LLM providers step-by-step with automatic encryption into the local vault:
 
 ```bash
-# Interactive selection menu
+# Interactive selection menu (Apps & LLM providers)
 clawbridge connect
 
-# Direct connector setup
+# Direct application connectors
 clawbridge connect slack
 clawbridge connect jira
 clawbridge connect discord
 clawbridge connect twitter
 clawbridge connect github
-clawbridge connect gemini
-clawbridge connect openai
-clawbridge connect anthropic
+
+# Direct LLM provider connectors
+clawbridge connect gemini     # Supports AQ... and AIza... keys
+clawbridge connect openai     # Supports sk-... keys
+clawbridge connect anthropic  # Supports sk-ant-... keys
 ```
 
 ### Permission Wizard
@@ -337,7 +339,7 @@ ClawBridge automatically detects and encrypts secrets from a local `.env` file i
 
 ```bash
 # LLM Providers (at least one recommended)
-GEMINI_API_KEY="AIza..."
+GEMINI_API_KEY="AQ.Ab8... or AIza..."
 OPENAI_API_KEY="sk-..."
 ANTHROPIC_API_KEY="sk-ant-..."
 OLLAMA_HOST="http://localhost:11434"
