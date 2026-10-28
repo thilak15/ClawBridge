@@ -1,5 +1,6 @@
 .DS_Store
-.preflight/cache.db
+.preflight/
+blueprint_report.html
 preflight/
 .venv/
 __pycache__/
