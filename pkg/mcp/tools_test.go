@@ -69,6 +69,13 @@ func TestTools_ListTools(t *testing.T) {
 		"instagram_reply_comment",
 		"facebook_post_feed",
 		"facebook_read_page_feed",
+		"calendar_list_events",
+		"calendar_find_free_slots",
+		"calendar_create_event",
+		"gmail_search_messages",
+		"gmail_read_thread",
+		"gmail_create_draft",
+		"gmail_send_message",
 	}
 	for _, exp := range expected {
 		if !names[exp] {
@@ -223,6 +230,101 @@ func TestTools_CallTool_MetaInstagramAndFacebook(t *testing.T) {
 	fbReadReceipt, err := tools.CallTool(context.Background(), "facebook_read_page_feed", fbReadArgs)
 	if err != nil || fbReadReceipt.StatusCode != 200 {
 		t.Fatalf("failed to call facebook_read_page_feed: err=%v, receipt=%+v", err, fbReadReceipt)
+	}
+}
+
+func TestTools_CallTool_GoogleCalendarAndGmail(t *testing.T) {
+	tools, server, v := setupTestTools(t)
+	defer server.Close()
+
+	googleTokenID, _ := v.StoreOAuthToken("google", "client_google", map[string]any{"access_token": "ya29.google-test-token"}, 3600)
+
+	// 1. Calendar list events
+	calListArgs := map[string]any{
+		"calendar_id": "primary",
+		"time_min":    "2026-10-28T00:00:00Z",
+		"token_id":    googleTokenID,
+		"url":         server.URL + "/calendar/v3/calendars/primary/events",
+	}
+	calListReceipt, err := tools.CallTool(context.Background(), "calendar_list_events", calListArgs)
+	if err != nil || calListReceipt.StatusCode != 200 {
+		t.Fatalf("failed to call calendar_list_events: err=%v, receipt=%+v", err, calListReceipt)
+	}
+
+	// 2. Calendar find free slots
+	calFreeArgs := map[string]any{
+		"calendar_id": "primary",
+		"time_min":    "2026-10-28T09:00:00Z",
+		"time_max":    "2026-10-28T17:00:00Z",
+		"token_id":    googleTokenID,
+		"url":         server.URL + "/calendar/v3/freeBusy",
+	}
+	calFreeReceipt, err := tools.CallTool(context.Background(), "calendar_find_free_slots", calFreeArgs)
+	if err != nil || calFreeReceipt.StatusCode != 200 {
+		t.Fatalf("failed to call calendar_find_free_slots: err=%v, receipt=%+v", err, calFreeReceipt)
+	}
+
+	// 3. Calendar create event
+	calCreateArgs := map[string]any{
+		"summary":     "Sprint Planning",
+		"description": "Weekly alignment",
+		"start_time":  "2026-10-29T10:00:00Z",
+		"end_time":    "2026-10-29T11:00:00Z",
+		"attendees":   []any{"colleague@example.com"},
+		"token_id":    googleTokenID,
+		"url":         server.URL + "/calendar/v3/calendars/primary/events",
+	}
+	calCreateReceipt, err := tools.CallTool(context.Background(), "calendar_create_event", calCreateArgs)
+	if err != nil || calCreateReceipt.StatusCode != 200 {
+		t.Fatalf("failed to call calendar_create_event: err=%v, receipt=%+v", err, calCreateReceipt)
+	}
+
+	// 4. Gmail search messages
+	gmailSearchArgs := map[string]any{
+		"query":    "is:unread label:inbox",
+		"token_id": googleTokenID,
+		"url":      server.URL + "/gmail/v1/users/me/messages",
+	}
+	gmailSearchReceipt, err := tools.CallTool(context.Background(), "gmail_search_messages", gmailSearchArgs)
+	if err != nil || gmailSearchReceipt.StatusCode != 200 {
+		t.Fatalf("failed to call gmail_search_messages: err=%v, receipt=%+v", err, gmailSearchReceipt)
+	}
+
+	// 5. Gmail read thread
+	gmailThreadArgs := map[string]any{
+		"thread_id": "thread_abc123",
+		"token_id":  googleTokenID,
+		"url":       server.URL + "/gmail/v1/users/me/threads/thread_abc123",
+	}
+	gmailThreadReceipt, err := tools.CallTool(context.Background(), "gmail_read_thread", gmailThreadArgs)
+	if err != nil || gmailThreadReceipt.StatusCode != 200 {
+		t.Fatalf("failed to call gmail_read_thread: err=%v, receipt=%+v", err, gmailThreadReceipt)
+	}
+
+	// 6. Gmail create draft
+	gmailDraftArgs := map[string]any{
+		"to":       "partner@example.com",
+		"subject":  "Draft Partnership Proposal",
+		"body":     "Here is the tentative draft proposal.",
+		"token_id": googleTokenID,
+		"url":      server.URL + "/gmail/v1/users/me/drafts",
+	}
+	gmailDraftReceipt, err := tools.CallTool(context.Background(), "gmail_create_draft", gmailDraftArgs)
+	if err != nil || gmailDraftReceipt.StatusCode != 200 {
+		t.Fatalf("failed to call gmail_create_draft: err=%v, receipt=%+v", err, gmailDraftReceipt)
+	}
+
+	// 7. Gmail send message
+	gmailSendArgs := map[string]any{
+		"to":       "client@example.com",
+		"subject":  "Product Launch Update",
+		"body":     "The product launch has been completed successfully.",
+		"token_id": googleTokenID,
+		"url":      server.URL + "/gmail/v1/users/me/messages/send",
+	}
+	gmailSendReceipt, err := tools.CallTool(context.Background(), "gmail_send_message", gmailSendArgs)
+	if err != nil || gmailSendReceipt.StatusCode != 200 {
+		t.Fatalf("failed to call gmail_send_message: err=%v, receipt=%+v", err, gmailSendReceipt)
 	}
 }
 

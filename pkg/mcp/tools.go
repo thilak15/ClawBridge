@@ -2,8 +2,10 @@ package mcp
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"clawbridge/pkg/dispatch"
@@ -225,6 +227,111 @@ func (t *Tools) ListTools() []ToolDefinition {
 				},
 			},
 		},
+		{
+			Name:        "calendar_list_events",
+			Description: "List calendar events within a specified time range via Google Calendar API.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"calendar_id":   map[string]any{"type": "string", "description": "Calendar ID (default: primary)"},
+					"time_min":      map[string]any{"type": "string", "description": "Lower bound for event start time (RFC3339)"},
+					"time_max":      map[string]any{"type": "string", "description": "Upper bound for event start time (RFC3339)"},
+					"max_results":   map[string]any{"type": "integer", "description": "Maximum events to return (default 25)"},
+					"token_id":      map[string]any{"type": "string", "description": "Optional Google OAuth token ID in Vault"},
+					"credential_id": map[string]any{"type": "string", "description": "Optional Google credential ID in Vault"},
+				},
+			},
+		},
+		{
+			Name:        "calendar_find_free_slots",
+			Description: "Query busy/free intervals across calendars to discover open meeting slots via Google Calendar FreeBusy API.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"calendar_id":   map[string]any{"type": "string", "description": "Calendar ID (default: primary)"},
+					"time_min":      map[string]any{"type": "string", "description": "Start of query window (RFC3339)"},
+					"time_max":      map[string]any{"type": "string", "description": "End of query window (RFC3339)"},
+					"token_id":      map[string]any{"type": "string", "description": "Optional Google OAuth token ID in Vault"},
+					"credential_id": map[string]any{"type": "string", "description": "Optional Google credential ID in Vault"},
+				},
+				"required": []string{"time_min", "time_max"},
+			},
+		},
+		{
+			Name:        "calendar_create_event",
+			Description: "Create a calendar event with attendees and schedule via Google Calendar API.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"summary":       map[string]any{"type": "string", "description": "Event title/summary"},
+					"description":   map[string]any{"type": "string", "description": "Event detailed description"},
+					"start_time":    map[string]any{"type": "string", "description": "Start time in RFC3339 format"},
+					"end_time":      map[string]any{"type": "string", "description": "End time in RFC3339 format"},
+					"attendees":     map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "List of attendee email addresses"},
+					"calendar_id":   map[string]any{"type": "string", "description": "Calendar ID (default: primary)"},
+					"token_id":      map[string]any{"type": "string", "description": "Optional Google OAuth token ID in Vault"},
+					"credential_id": map[string]any{"type": "string", "description": "Optional Google credential ID in Vault"},
+				},
+				"required": []string{"summary", "start_time", "end_time"},
+			},
+		},
+		{
+			Name:        "gmail_search_messages",
+			Description: "Search user emails using standard Gmail search queries (e.g. 'is:unread', 'from:sender').",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"query":         map[string]any{"type": "string", "description": "Gmail search query string"},
+					"max_results":   map[string]any{"type": "integer", "description": "Maximum messages to return (default 10)"},
+					"token_id":      map[string]any{"type": "string", "description": "Optional Google OAuth token ID in Vault"},
+					"credential_id": map[string]any{"type": "string", "description": "Optional Google credential ID in Vault"},
+				},
+				"required": []string{"query"},
+			},
+		},
+		{
+			Name:        "gmail_read_thread",
+			Description: "Read the full contents and message headers of an email thread via Gmail API.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"thread_id":     map[string]any{"type": "string", "description": "The Gmail thread ID"},
+					"token_id":      map[string]any{"type": "string", "description": "Optional Google OAuth token ID in Vault"},
+					"credential_id": map[string]any{"type": "string", "description": "Optional Google credential ID in Vault"},
+				},
+				"required": []string{"thread_id"},
+			},
+		},
+		{
+			Name:        "gmail_create_draft",
+			Description: "Create a draft email in Gmail without sending it.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"to":            map[string]any{"type": "string", "description": "Recipient email address"},
+					"subject":       map[string]any{"type": "string", "description": "Email subject line"},
+					"body":          map[string]any{"type": "string", "description": "Plain text body of the email"},
+					"token_id":      map[string]any{"type": "string", "description": "Optional Google OAuth token ID in Vault"},
+					"credential_id": map[string]any{"type": "string", "description": "Optional Google credential ID in Vault"},
+				},
+				"required": []string{"to", "subject", "body"},
+			},
+		},
+		{
+			Name:        "gmail_send_message",
+			Description: "Send an email message via Gmail API (requires Human-in-the-Loop guardrail approval).",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"to":            map[string]any{"type": "string", "description": "Recipient email address"},
+					"subject":       map[string]any{"type": "string", "description": "Email subject line"},
+					"body":          map[string]any{"type": "string", "description": "Plain text body of the email"},
+					"token_id":      map[string]any{"type": "string", "description": "Optional Google OAuth token ID in Vault"},
+					"credential_id": map[string]any{"type": "string", "description": "Optional Google credential ID in Vault"},
+				},
+				"required": []string{"to", "subject", "body"},
+			},
+		},
 	}
 }
 
@@ -261,6 +368,20 @@ func (t *Tools) CallTool(ctx context.Context, name string, args map[string]any) 
 		return t.callFacebookPostFeed(ctx, args)
 	case "facebook_read_page_feed":
 		return t.callFacebookReadPageFeed(ctx, args)
+	case "calendar_list_events":
+		return t.callCalendarListEvents(ctx, args)
+	case "calendar_find_free_slots":
+		return t.callCalendarFindFreeSlots(ctx, args)
+	case "calendar_create_event":
+		return t.callCalendarCreateEvent(ctx, args)
+	case "gmail_search_messages":
+		return t.callGmailSearchMessages(ctx, args)
+	case "gmail_read_thread":
+		return t.callGmailReadThread(ctx, args)
+	case "gmail_create_draft":
+		return t.callGmailCreateDraft(ctx, args)
+	case "gmail_send_message":
+		return t.callGmailSendMessage(ctx, args)
 	default:
 		return nil, fmt.Errorf("unknown tool '%s'", name)
 	}
@@ -708,5 +829,271 @@ func (t *Tools) callFacebookReadPageFeed(ctx context.Context, args map[string]an
 		URL:          url,
 		TokenID:      tokenID,
 		CredentialID: credID,
+	})
+}
+
+func (t *Tools) callCalendarListEvents(ctx context.Context, args map[string]any) (*dispatch.EgressReceipt, error) {
+	calID, _ := args["calendar_id"].(string)
+	if calID == "" {
+		calID = "primary"
+	}
+	timeMin, _ := args["time_min"].(string)
+	timeMax, _ := args["time_max"].(string)
+
+	tokenID, _ := args["token_id"].(string)
+	if tokenID == "" {
+		tokenID = t.defaultTokens["google"]
+	}
+	credID, _ := args["credential_id"].(string)
+	if credID == "" && tokenID == "" {
+		credID = t.defaultCreds["google"]
+	}
+
+	urlStr, _ := args["url"].(string)
+	if urlStr == "" {
+		params := url.Values{}
+		if timeMin != "" {
+			params.Set("timeMin", timeMin)
+		}
+		if timeMax != "" {
+			params.Set("timeMax", timeMax)
+		}
+		params.Set("singleEvents", "true")
+		params.Set("orderBy", "startTime")
+		urlStr = fmt.Sprintf("https://www.googleapis.com/calendar/v3/calendars/%s/events?%s", url.PathEscape(calID), params.Encode())
+	}
+
+	return t.dispatcher.Dispatch(ctx, dispatch.DispatchRequest{
+		Channel:      "calendar",
+		Action:       "list_events",
+		Method:       http.MethodGet,
+		URL:          urlStr,
+		TokenID:      tokenID,
+		CredentialID: credID,
+	})
+}
+
+func (t *Tools) callCalendarFindFreeSlots(ctx context.Context, args map[string]any) (*dispatch.EgressReceipt, error) {
+	calID, _ := args["calendar_id"].(string)
+	if calID == "" {
+		calID = "primary"
+	}
+	timeMin, _ := args["time_min"].(string)
+	timeMax, _ := args["time_max"].(string)
+
+	tokenID, _ := args["token_id"].(string)
+	if tokenID == "" {
+		tokenID = t.defaultTokens["google"]
+	}
+	credID, _ := args["credential_id"].(string)
+	if credID == "" && tokenID == "" {
+		credID = t.defaultCreds["google"]
+	}
+
+	urlStr, _ := args["url"].(string)
+	if urlStr == "" {
+		urlStr = "https://www.googleapis.com/calendar/v3/freeBusy"
+	}
+
+	body := map[string]any{
+		"timeMin": timeMin,
+		"timeMax": timeMax,
+		"items": []map[string]any{
+			{"id": calID},
+		},
+	}
+
+	return t.dispatcher.Dispatch(ctx, dispatch.DispatchRequest{
+		Channel:      "calendar",
+		Action:       "find_free_slots",
+		Method:       http.MethodPost,
+		URL:          urlStr,
+		TokenID:      tokenID,
+		CredentialID: credID,
+		Body:         body,
+	})
+}
+
+func (t *Tools) callCalendarCreateEvent(ctx context.Context, args map[string]any) (*dispatch.EgressReceipt, error) {
+	calID, _ := args["calendar_id"].(string)
+	if calID == "" {
+		calID = "primary"
+	}
+	summary, _ := args["summary"].(string)
+	description, _ := args["description"].(string)
+	startTime, _ := args["start_time"].(string)
+	endTime, _ := args["end_time"].(string)
+
+	tokenID, _ := args["token_id"].(string)
+	if tokenID == "" {
+		tokenID = t.defaultTokens["google"]
+	}
+	credID, _ := args["credential_id"].(string)
+	if credID == "" && tokenID == "" {
+		credID = t.defaultCreds["google"]
+	}
+
+	urlStr, _ := args["url"].(string)
+	if urlStr == "" {
+		urlStr = fmt.Sprintf("https://www.googleapis.com/calendar/v3/calendars/%s/events", url.PathEscape(calID))
+	}
+
+	body := map[string]any{
+		"summary":     summary,
+		"description": description,
+		"start":       map[string]any{"dateTime": startTime},
+		"end":         map[string]any{"dateTime": endTime},
+	}
+
+	if atts, ok := args["attendees"].([]any); ok && len(atts) > 0 {
+		var attendeesList []map[string]string
+		for _, a := range atts {
+			if email, ok := a.(string); ok && email != "" {
+				attendeesList = append(attendeesList, map[string]string{"email": email})
+			}
+		}
+		if len(attendeesList) > 0 {
+			body["attendees"] = attendeesList
+		}
+	}
+
+	return t.dispatcher.Dispatch(ctx, dispatch.DispatchRequest{
+		Channel:      "calendar",
+		Action:       "create_event",
+		Method:       http.MethodPost,
+		URL:          urlStr,
+		TokenID:      tokenID,
+		CredentialID: credID,
+		Body:         body,
+	})
+}
+
+func (t *Tools) callGmailSearchMessages(ctx context.Context, args map[string]any) (*dispatch.EgressReceipt, error) {
+	q, _ := args["query"].(string)
+	tokenID, _ := args["token_id"].(string)
+	if tokenID == "" {
+		tokenID = t.defaultTokens["google"]
+	}
+	credID, _ := args["credential_id"].(string)
+	if credID == "" && tokenID == "" {
+		credID = t.defaultCreds["google"]
+	}
+
+	urlStr, _ := args["url"].(string)
+	if urlStr == "" {
+		params := url.Values{}
+		params.Set("q", q)
+		urlStr = fmt.Sprintf("https://gmail.googleapis.com/gmail/v1/users/me/messages?%s", params.Encode())
+	}
+
+	return t.dispatcher.Dispatch(ctx, dispatch.DispatchRequest{
+		Channel:      "gmail",
+		Action:       "search_messages",
+		Method:       http.MethodGet,
+		URL:          urlStr,
+		TokenID:      tokenID,
+		CredentialID: credID,
+	})
+}
+
+func (t *Tools) callGmailReadThread(ctx context.Context, args map[string]any) (*dispatch.EgressReceipt, error) {
+	threadID, _ := args["thread_id"].(string)
+	tokenID, _ := args["token_id"].(string)
+	if tokenID == "" {
+		tokenID = t.defaultTokens["google"]
+	}
+	credID, _ := args["credential_id"].(string)
+	if credID == "" && tokenID == "" {
+		credID = t.defaultCreds["google"]
+	}
+
+	urlStr, _ := args["url"].(string)
+	if urlStr == "" {
+		urlStr = fmt.Sprintf("https://gmail.googleapis.com/gmail/v1/users/me/threads/%s", url.PathEscape(threadID))
+	}
+
+	return t.dispatcher.Dispatch(ctx, dispatch.DispatchRequest{
+		Channel:      "gmail",
+		Action:       "read_thread",
+		Method:       http.MethodGet,
+		URL:          urlStr,
+		TokenID:      tokenID,
+		CredentialID: credID,
+	})
+}
+
+func (t *Tools) callGmailCreateDraft(ctx context.Context, args map[string]any) (*dispatch.EgressReceipt, error) {
+	to, _ := args["to"].(string)
+	subject, _ := args["subject"].(string)
+	msgBody, _ := args["body"].(string)
+
+	tokenID, _ := args["token_id"].(string)
+	if tokenID == "" {
+		tokenID = t.defaultTokens["google"]
+	}
+	credID, _ := args["credential_id"].(string)
+	if credID == "" && tokenID == "" {
+		credID = t.defaultCreds["google"]
+	}
+
+	rawEmail := fmt.Sprintf("To: %s\r\nSubject: %s\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n%s", to, subject, msgBody)
+	encodedRaw := base64.URLEncoding.EncodeToString([]byte(rawEmail))
+
+	urlStr, _ := args["url"].(string)
+	if urlStr == "" {
+		urlStr = "https://gmail.googleapis.com/gmail/v1/users/me/drafts"
+	}
+
+	body := map[string]any{
+		"message": map[string]any{
+			"raw": encodedRaw,
+		},
+	}
+
+	return t.dispatcher.Dispatch(ctx, dispatch.DispatchRequest{
+		Channel:      "gmail",
+		Action:       "create_draft",
+		Method:       http.MethodPost,
+		URL:          urlStr,
+		TokenID:      tokenID,
+		CredentialID: credID,
+		Body:         body,
+	})
+}
+
+func (t *Tools) callGmailSendMessage(ctx context.Context, args map[string]any) (*dispatch.EgressReceipt, error) {
+	to, _ := args["to"].(string)
+	subject, _ := args["subject"].(string)
+	msgBody, _ := args["body"].(string)
+
+	tokenID, _ := args["token_id"].(string)
+	if tokenID == "" {
+		tokenID = t.defaultTokens["google"]
+	}
+	credID, _ := args["credential_id"].(string)
+	if credID == "" && tokenID == "" {
+		credID = t.defaultCreds["google"]
+	}
+
+	rawEmail := fmt.Sprintf("To: %s\r\nSubject: %s\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n%s", to, subject, msgBody)
+	encodedRaw := base64.URLEncoding.EncodeToString([]byte(rawEmail))
+
+	urlStr, _ := args["url"].(string)
+	if urlStr == "" {
+		urlStr = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
+	}
+
+	body := map[string]any{
+		"raw": encodedRaw,
+	}
+
+	return t.dispatcher.Dispatch(ctx, dispatch.DispatchRequest{
+		Channel:      "gmail",
+		Action:       "send_message",
+		Method:       http.MethodPost,
+		URL:          urlStr,
+		TokenID:      tokenID,
+		CredentialID: credID,
+		Body:         body,
 	})
 }
