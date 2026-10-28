@@ -194,7 +194,7 @@ func RunConsoleWithConfig(ctx context.Context, cfg ConsoleConfig) error {
 				Name:         agentName,
 				Description:  fmt.Sprintf("Autonomous agent '%s' created via console", agentName),
 				SystemPrompt: fmt.Sprintf("You are %s, an autonomous multi-platform agent equipped with ClawBridge tools.", agentName),
-				Model:        "gemini-1.5-flash",
+				Model:        "gemini-3.8-flash",
 				Permissions:  []string{"*"},
 			})
 			if err != nil {

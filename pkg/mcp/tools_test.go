@@ -64,6 +64,11 @@ func TestTools_ListTools(t *testing.T) {
 		"telegram_send_photo",
 		"whatsapp_send_message",
 		"whatsapp_send_template",
+		"instagram_post_publish",
+		"instagram_read_comments",
+		"instagram_reply_comment",
+		"facebook_post_feed",
+		"facebook_read_page_feed",
 	}
 	for _, exp := range expected {
 		if !names[exp] {
@@ -152,6 +157,72 @@ func TestTools_CallTool_TelegramAndWhatsApp(t *testing.T) {
 	tmplReceipt, err := tools.CallTool(context.Background(), "whatsapp_send_template", tmplArgs)
 	if err != nil || tmplReceipt.StatusCode != 200 {
 		t.Fatalf("failed to call whatsapp_send_template: err=%v, receipt=%+v", err, tmplReceipt)
+	}
+}
+
+func TestTools_CallTool_MetaInstagramAndFacebook(t *testing.T) {
+	tools, server, v := setupTestTools(t)
+	defer server.Close()
+
+	igTokenID, _ := v.StoreOAuthToken("instagram", "ig_client", map[string]any{"access_token": "IG_ACCESS_TOKEN_123"}, 3600)
+	fbTokenID, _ := v.StoreOAuthToken("facebook", "fb_client", map[string]any{"access_token": "EAABfb123456"}, 3600)
+
+	// 1. Instagram Post Publish
+	igPostArgs := map[string]any{
+		"image_url": "https://example.com/banner.jpg",
+		"caption":   "Exciting launch! #ai #daemon",
+		"token_id":  igTokenID,
+		"url":       server.URL + "/v20.0/me/media",
+	}
+	igReceipt, err := tools.CallTool(context.Background(), "instagram_post_publish", igPostArgs)
+	if err != nil || igReceipt.StatusCode != 200 {
+		t.Fatalf("failed to call instagram_post_publish: err=%v, receipt=%+v", err, igReceipt)
+	}
+
+	// 2. Instagram Read Comments
+	igReadArgs := map[string]any{
+		"media_id": "media_987654",
+		"token_id": igTokenID,
+		"url":      server.URL + "/v20.0/media_987654/comments",
+	}
+	readReceipt, err := tools.CallTool(context.Background(), "instagram_read_comments", igReadArgs)
+	if err != nil || readReceipt.StatusCode != 200 {
+		t.Fatalf("failed to call instagram_read_comments: err=%v, receipt=%+v", err, readReceipt)
+	}
+
+	// 3. Instagram Reply Comment
+	igReplyArgs := map[string]any{
+		"comment_id": "cmt_112233",
+		"message":    "Thank you for the feedback!",
+		"token_id":   igTokenID,
+		"url":        server.URL + "/v20.0/cmt_112233/replies",
+	}
+	replyReceipt, err := tools.CallTool(context.Background(), "instagram_reply_comment", igReplyArgs)
+	if err != nil || replyReceipt.StatusCode != 200 {
+		t.Fatalf("failed to call instagram_reply_comment: err=%v, receipt=%+v", err, replyReceipt)
+	}
+
+	// 4. Facebook Post Feed
+	fbPostArgs := map[string]any{
+		"message":  "Release v1.0 is now live!",
+		"link":     "https://clawbridge.dev",
+		"token_id": fbTokenID,
+		"url":      server.URL + "/v20.0/me/feed",
+	}
+	fbReceipt, err := tools.CallTool(context.Background(), "facebook_post_feed", fbPostArgs)
+	if err != nil || fbReceipt.StatusCode != 200 {
+		t.Fatalf("failed to call facebook_post_feed: err=%v, receipt=%+v", err, fbReceipt)
+	}
+
+	// 5. Facebook Read Page Feed
+	fbReadArgs := map[string]any{
+		"page_id":  "me",
+		"token_id": fbTokenID,
+		"url":      server.URL + "/v20.0/me/feed",
+	}
+	fbReadReceipt, err := tools.CallTool(context.Background(), "facebook_read_page_feed", fbReadArgs)
+	if err != nil || fbReadReceipt.StatusCode != 200 {
+		t.Fatalf("failed to call facebook_read_page_feed: err=%v, receipt=%+v", err, fbReadReceipt)
 	}
 }
 

@@ -38,10 +38,10 @@ func DetectProviderFromKey(key string) ProviderType {
 // DetectProviderFromEnv inspects environment variables to choose the best available LLM provider.
 func DetectProviderFromEnv() (ProviderType, string, string) {
 	if key := os.Getenv("GEMINI_API_KEY"); key != "" {
-		return ProviderGemini, key, "gemini-1.5-flash"
+		return ProviderGemini, key, "gemini-3.8-flash"
 	}
 	if key := os.Getenv("GOOGLE_API_KEY"); key != "" {
-		return ProviderGemini, key, "gemini-1.5-flash"
+		return ProviderGemini, key, "gemini-3.8-flash"
 	}
 	if key := os.Getenv("OPENAI_API_KEY"); key != "" {
 		return ProviderOpenAI, key, "gpt-4o-mini"
@@ -53,7 +53,24 @@ func DetectProviderFromEnv() (ProviderType, string, string) {
 		return ProviderOllama, "", "llama3.2"
 	}
 	// Default to Gemini if nothing specified
-	return ProviderGemini, "", "gemini-1.5-flash"
+	return ProviderGemini, "", "gemini-3.8-flash"
+}
+
+// NormalizeGeminiModel maps legacy and deprecated model identifiers (e.g. 1.5, 2.0, 2.5)
+// to active supported endpoints (e.g. gemini-3.8-flash, gemini-3.5-flash-lite).
+func NormalizeGeminiModel(model string) string {
+	m := strings.TrimSpace(strings.ToLower(model))
+	switch m {
+	case "", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash-latest":
+		return "gemini-3.8-flash"
+	case "gemini-1.5-flash-lite", "gemini-2.0-flash-lite", "gemini-2.5-flash-lite":
+		return "gemini-3.5-flash-lite"
+	default:
+		if strings.HasPrefix(m, "gpt-") || strings.HasPrefix(m, "claude-") {
+			return "gemini-3.8-flash"
+		}
+		return strings.TrimSpace(model)
+	}
 }
 
 // NewClient initializes a new native HTTP LLM Client.
@@ -237,9 +254,7 @@ func (c *Client) chatGemini(ctx context.Context, req ChatRequest) (*ChatResponse
 	if model == "" || strings.HasPrefix(model, "gpt-") || strings.HasPrefix(model, "claude-") {
 		model = c.config.Model
 	}
-	if model == "" {
-		model = "gemini-1.5-flash"
-	}
+	model = NormalizeGeminiModel(model)
 
 	baseURL := c.config.BaseURL
 	var endpoint string

@@ -34,9 +34,11 @@ func NewTokenBucketLimiter(rates map[string]ChannelRate) *TokenBucketLimiter {
 		"jira":     {RatePerSecond: 5.0, Capacity: 10.0},
 		"twitter":  {RatePerSecond: 2.0, Capacity: 5.0},
 		"discord":  {RatePerSecond: 5.0, Capacity: 10.0},
-		"telegram": {RatePerSecond: 30.0, Capacity: 30.0},
-		"whatsapp": {RatePerSecond: 80.0, Capacity: 100.0},
-		"default":  {RatePerSecond: 5.0, Capacity: 10.0},
+		"telegram":  {RatePerSecond: 30.0, Capacity: 30.0},
+		"whatsapp":  {RatePerSecond: 80.0, Capacity: 100.0},
+		"instagram": {RatePerSecond: 5.0, Capacity: 10.0},
+		"facebook":  {RatePerSecond: 5.0, Capacity: 10.0},
+		"default":   {RatePerSecond: 5.0, Capacity: 10.0},
 	}
 
 	for k, v := range rates {

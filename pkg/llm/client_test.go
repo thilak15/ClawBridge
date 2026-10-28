@@ -18,12 +18,39 @@ func TestClient_DetectProviderFromEnv(t *testing.T) {
 	t.Setenv("GEMINI_API_KEY", "test-gemini-key")
 	t.Setenv("OPENAI_API_KEY", "")
 
-	provider, key, _ := llm.DetectProviderFromEnv()
+	provider, key, model := llm.DetectProviderFromEnv()
 	if provider != llm.ProviderGemini {
 		t.Fatalf("expected ProviderGemini, got %v", provider)
 	}
 	if key != "test-gemini-key" {
 		t.Fatalf("expected 'test-gemini-key', got '%s'", key)
+	}
+	if model != "gemini-3.8-flash" {
+		t.Fatalf("expected 'gemini-3.8-flash', got '%s'", model)
+	}
+}
+
+func TestNormalizeGeminiModel(t *testing.T) {
+	cases := []struct {
+		input    string
+		expected string
+	}{
+		{"gemini-1.5-flash", "gemini-3.8-flash"},
+		{"gemini-1.5-pro", "gemini-3.8-flash"},
+		{"gemini-2.0-flash", "gemini-3.8-flash"},
+		{"gemini-2.5-flash", "gemini-3.8-flash"},
+		{"gemini-1.5-flash-lite", "gemini-3.5-flash-lite"},
+		{"gemini-2.5-flash-lite", "gemini-3.5-flash-lite"},
+		{"gemini-3.8-flash", "gemini-3.8-flash"},
+		{"gpt-4o", "gemini-3.8-flash"},
+		{"", "gemini-3.8-flash"},
+	}
+
+	for _, c := range cases {
+		got := llm.NormalizeGeminiModel(c.input)
+		if got != c.expected {
+			t.Errorf("for input %q expected %q, got %q", c.input, c.expected, got)
+		}
 	}
 }
 

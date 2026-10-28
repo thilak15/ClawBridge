@@ -133,7 +133,7 @@ func (o *Orchestrator) StartAgent(ctx context.Context, name string) error {
 		cfg = agents.AgentConfig{
 			Name:         name,
 			SystemPrompt: fmt.Sprintf("You are %s, an autonomous assistant equipped with ClawBridge tools.", name),
-			Model:        "gemini-1.5-flash",
+			Model:        "gemini-3.8-flash",
 			Permissions:  []string{"*"},
 		}
 	}
