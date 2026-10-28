@@ -354,6 +354,43 @@ func (v *CredentialVault) GetOrRefreshOAuthToken(
 	return freshResult.(*OAuthTokenRecord), nil
 }
 
+// ForceRefreshOAuthToken executes token refresh via single-flight regardless of whether it is already expired.
+func (v *CredentialVault) ForceRefreshOAuthToken(
+	id string,
+	refreshFn func(rec *OAuthTokenRecord) (map[string]any, error),
+) (*OAuthTokenRecord, error) {
+	rec, err := v.GetOAuthToken(id)
+	if err != nil {
+		return nil, err
+	}
+
+	freshResult, err := v.flight.Execute(id, func() (any, error) {
+		newTokens, err := refreshFn(rec)
+		if err != nil {
+			return nil, fmt.Errorf("oauth refresh function failed: %w", err)
+		}
+
+		expiresIn := 3600
+		if exp, ok := newTokens["expires_in"].(float64); ok {
+			expiresIn = int(exp)
+		} else if expInt, ok := newTokens["expires_in"].(int); ok {
+			expiresIn = expInt
+		}
+
+		if err := v.UpdateOAuthToken(id, newTokens, expiresIn); err != nil {
+			return nil, fmt.Errorf("failed to store refreshed token: %w", err)
+		}
+
+		return v.GetOAuthToken(id)
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return freshResult.(*OAuthTokenRecord), nil
+}
+
 // UpsertOAuthTokenByChannel inserts or updates an OAuth token record for a given channel.
 func (v *CredentialVault) UpsertOAuthTokenByChannel(channel, clientID string, tokenData map[string]any, expiresIn int) (string, error) {
 	encryptedBlob, err := v.encryptPayload(tokenData)
@@ -405,4 +442,43 @@ func (v *CredentialVault) GetOAuthTokenByChannel(channel string) (*OAuthTokenRec
 	}
 
 	return v.GetOAuthToken(id)
+}
+
+// ListExpiringTokens finds all OAuth tokens whose expiration is within threshold from now (or already expired).
+func (v *CredentialVault) ListExpiringTokens(threshold time.Duration) ([]*OAuthTokenRecord, error) {
+	query := `
+	SELECT id, channel, client_id, encrypted_blob, expires_at, created_at, updated_at
+	FROM oauth_tokens WHERE expires_at IS NOT NULL;
+	`
+	rows, err := v.db.DB().Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query oauth tokens: %w", err)
+	}
+	defer rows.Close()
+
+	var expiring []*OAuthTokenRecord
+	targetTime := time.Now().Add(threshold)
+
+	for rows.Next() {
+		var rec OAuthTokenRecord
+		var encryptedBlob, createdAtStr, updatedAtStr string
+		var expiresAtFloat *float64
+
+		if err := rows.Scan(&rec.ID, &rec.Channel, &rec.ClientID, &encryptedBlob, &expiresAtFloat, &createdAtStr, &updatedAtStr); err != nil {
+			return nil, err
+		}
+
+		if expiresAtFloat != nil {
+			expTime := time.Unix(int64(*expiresAtFloat), 0).UTC()
+			rec.ExpiresAt = &expTime
+			if targetTime.After(expTime) {
+				rec.CreatedAt, _ = time.Parse(time.RFC3339, createdAtStr)
+				rec.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAtStr)
+				_ = v.decryptPayload(encryptedBlob, &rec.TokenData)
+				expiring = append(expiring, &rec)
+			}
+		}
+	}
+
+	return expiring, nil
 }
