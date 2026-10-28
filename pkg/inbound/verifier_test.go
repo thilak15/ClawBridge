@@ -127,3 +127,47 @@ func TestWebhookVerifier_VerifyHMACSHA256_GenericGitHub(t *testing.T) {
 		t.Fatalf("unexpected result: %+v", res)
 	}
 }
+
+func TestWebhookVerifier_VerifyTelegramSecret(t *testing.T) {
+	dbMgr := setupTestDB(t)
+	defer dbMgr.Close()
+
+	verifier := inbound.NewWebhookVerifier(dbMgr, 300)
+	expectedSecret := "telegram-secret-token-12345"
+	body := []byte(`{"update_id":10000,"message":{"text":"/start"}}`)
+
+	res, err := verifier.VerifyTelegramSecret(body, expectedSecret, expectedSecret, "tg_deliv_001")
+	if err != nil {
+		t.Fatalf("expected valid telegram secret, got error: %v", err)
+	}
+	if res.Channel != "telegram" || !res.IsValid {
+		t.Errorf("unexpected telegram webhook result: %+v", res)
+	}
+
+	// Mismatched secret must fail
+	_, err = verifier.VerifyTelegramSecret(body, "wrong-secret", expectedSecret, "tg_deliv_002")
+	if err == nil {
+		t.Fatalf("expected error on mismatched secret, got nil")
+	}
+}
+
+func TestWebhookVerifier_VerifyWhatsApp(t *testing.T) {
+	dbMgr := setupTestDB(t)
+	defer dbMgr.Close()
+
+	verifier := inbound.NewWebhookVerifier(dbMgr, 300)
+	appSecret := "meta-app-secret-xyz"
+	body := []byte(`{"object":"whatsapp_business_account","entry":[]}`)
+
+	mac := hmac.New(sha256.New, []byte(appSecret))
+	mac.Write(body)
+	sigHeader := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+
+	res, err := verifier.VerifyWhatsApp(body, sigHeader, appSecret, "wa_deliv_001")
+	if err != nil {
+		t.Fatalf("expected valid whatsapp webhook, got error: %v", err)
+	}
+	if res.Channel != "whatsapp" || !res.IsValid {
+		t.Errorf("unexpected whatsapp webhook result: %+v", res)
+	}
+}

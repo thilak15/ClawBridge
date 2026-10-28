@@ -55,7 +55,16 @@ func TestTools_ListTools(t *testing.T) {
 		names[tool.Name] = true
 	}
 
-	expected := []string{"slack_post_message", "jira_create_issue", "twitter_post_tweet", "discord_send_message"}
+	expected := []string{
+		"slack_post_message",
+		"jira_create_issue",
+		"twitter_post_tweet",
+		"discord_send_message",
+		"telegram_send_message",
+		"telegram_send_photo",
+		"whatsapp_send_message",
+		"whatsapp_send_template",
+	}
 	for _, exp := range expected {
 		if !names[exp] {
 			t.Fatalf("expected tool '%s' in tools/list", exp)
@@ -83,6 +92,66 @@ func TestTools_CallTool_SlackPostMessage(t *testing.T) {
 
 	if receipt.Status != "success" || receipt.StatusCode != 200 {
 		t.Fatalf("expected success 200 receipt, got %+v", receipt)
+	}
+}
+
+func TestTools_CallTool_TelegramAndWhatsApp(t *testing.T) {
+	tools, server, v := setupTestTools(t)
+	defer server.Close()
+
+	credID, _ := v.StoreCredential("telegram", "bot_token", map[string]any{"token": "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"})
+	waCredID, _ := v.StoreCredential("whatsapp", "bearer", map[string]any{"token": "EAABwa123456"})
+
+	// 1. Telegram send message
+	tgArgs := map[string]any{
+		"chat_id":       "@channel_alerts",
+		"text":          "Deployment complete",
+		"credential_id": credID,
+		"url":           server.URL + "/bot/sendMessage",
+	}
+	tgReceipt, err := tools.CallTool(context.Background(), "telegram_send_message", tgArgs)
+	if err != nil || tgReceipt.StatusCode != 200 {
+		t.Fatalf("failed to call telegram_send_message: err=%v, receipt=%+v", err, tgReceipt)
+	}
+
+	// 2. Telegram send photo
+	photoArgs := map[string]any{
+		"chat_id":       "@channel_alerts",
+		"photo_url":     "https://example.com/status.png",
+		"caption":       "System healthy",
+		"credential_id": credID,
+		"url":           server.URL + "/bot/sendPhoto",
+	}
+	photoReceipt, err := tools.CallTool(context.Background(), "telegram_send_photo", photoArgs)
+	if err != nil || photoReceipt.StatusCode != 200 {
+		t.Fatalf("failed to call telegram_send_photo: err=%v, receipt=%+v", err, photoReceipt)
+	}
+
+	// 3. WhatsApp send message
+	waArgs := map[string]any{
+		"to":              "+14155552671",
+		"text":            "Order confirmed",
+		"phone_number_id": "100200300",
+		"credential_id":   waCredID,
+		"url":             server.URL + "/v20.0/messages",
+	}
+	waReceipt, err := tools.CallTool(context.Background(), "whatsapp_send_message", waArgs)
+	if err != nil || waReceipt.StatusCode != 200 {
+		t.Fatalf("failed to call whatsapp_send_message: err=%v, receipt=%+v", err, waReceipt)
+	}
+
+	// 4. WhatsApp send template
+	tmplArgs := map[string]any{
+		"to":              "+14155552671",
+		"template_name":   "sample_shipping_confirmation",
+		"language_code":   "en_US",
+		"phone_number_id": "100200300",
+		"credential_id":   waCredID,
+		"url":             server.URL + "/v20.0/messages",
+	}
+	tmplReceipt, err := tools.CallTool(context.Background(), "whatsapp_send_template", tmplArgs)
+	if err != nil || tmplReceipt.StatusCode != 200 {
+		t.Fatalf("failed to call whatsapp_send_template: err=%v, receipt=%+v", err, tmplReceipt)
 	}
 }
 
