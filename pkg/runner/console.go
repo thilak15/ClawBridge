@@ -8,8 +8,23 @@ import (
 	"io"
 	"strings"
 
+	"clawbridge/pkg/agents"
+	"clawbridge/pkg/auth"
 	"clawbridge/pkg/inbound"
+	"clawbridge/pkg/vault"
+	"clawbridge/pkg/wizard"
 )
+
+// ConsoleConfig encapsulates the dependencies needed by the interactive console.
+type ConsoleConfig struct {
+	In           io.Reader
+	Out          io.Writer
+	Orchestrator *Orchestrator
+	Broadcaster  *inbound.EventBroadcaster
+	Vault        *vault.CredentialVault
+	Registry     *auth.AgentRegistry
+	AgentsDir    string
+}
 
 // RunConsole runs the hybrid interactive CLI and reactive inbound webhook listener.
 func RunConsole(
@@ -19,9 +34,24 @@ func RunConsole(
 	orch *Orchestrator,
 	broadcaster *inbound.EventBroadcaster,
 ) error {
-	if orch == nil {
+	return RunConsoleWithConfig(ctx, ConsoleConfig{
+		In:           in,
+		Out:          out,
+		Orchestrator: orch,
+		Broadcaster:  broadcaster,
+	})
+}
+
+// RunConsoleWithConfig runs the hybrid interactive CLI, management REPL, and reactive inbound webhook listener.
+func RunConsoleWithConfig(ctx context.Context, cfg ConsoleConfig) error {
+	if cfg.Orchestrator == nil {
 		return fmt.Errorf("orchestrator cannot be nil")
 	}
+
+	in := cfg.In
+	out := cfg.Out
+	orch := cfg.Orchestrator
+	broadcaster := cfg.Broadcaster
 
 	// 1. Start reactive inbound event listener if broadcaster is provided
 	if broadcaster != nil {
@@ -58,39 +88,58 @@ func RunConsole(
 			break
 		}
 
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
+		rawLine := strings.TrimSpace(scanner.Text())
+		if rawLine == "" {
 			continue
 		}
 
-		switch strings.ToLower(line) {
-		case "exit", "quit":
+		// Strip leading "clawbridge " if user typed it out of habit
+		line := rawLine
+		if strings.HasPrefix(strings.ToLower(line), "clawbridge ") {
+			line = strings.TrimSpace(line[len("clawbridge "):])
+		}
+
+		lowerLine := strings.ToLower(line)
+
+		switch {
+		case lowerLine == "exit" || lowerLine == "quit":
 			return nil
 
-		case "help":
-			fmt.Fprintln(out, "Available Commands:")
-			fmt.Fprintln(out, "  <agent_name>: <task>     - Send a direct instruction to an agent")
-			fmt.Fprintln(out, "  broadcast: <task>        - Send an instruction to all running agents")
-			fmt.Fprintln(out, "  list                     - List all running agents")
-			fmt.Fprintln(out, "  status                   - Show agent turn counts and active memory")
-			fmt.Fprintln(out, "  help                     - Show this guidance message")
-			fmt.Fprintln(out, "  exit / quit              - Leave the console")
+		case lowerLine == "clear":
+			fmt.Fprint(out, "\033[H\033[2J")
 
-		case "list":
-			agents := orch.ListRunning()
-			if len(agents) == 0 {
+		case lowerLine == "help":
+			fmt.Fprintln(out, "Available Commands:")
+			fmt.Fprintln(out, "  Agent Instructions:")
+			fmt.Fprintln(out, "    <agent_name>: <task>     - Send a direct instruction to an agent")
+			fmt.Fprintln(out, "    broadcast: <task>        - Send an instruction to all running agents")
+			fmt.Fprintln(out, "")
+			fmt.Fprintln(out, "  Management & Configuration:")
+			fmt.Fprintln(out, "    connect [app]            - Connect platforms (Slack, Jira, etc.) or LLMs")
+			fmt.Fprintln(out, "    config                   - Configure per-agent access permissions")
+			fmt.Fprintln(out, "    agent create <name>      - Create and start a new autonomous agent")
+			fmt.Fprintln(out, "    run <agent>              - Start an inactive agent")
+			fmt.Fprintln(out, "    list                     - List all running agents")
+			fmt.Fprintln(out, "    status                   - Show agent turn counts and active memory")
+			fmt.Fprintln(out, "    clear                    - Clear terminal console screen")
+			fmt.Fprintln(out, "    help                     - Show this guidance message")
+			fmt.Fprintln(out, "    exit / quit              - Leave the console")
+
+		case lowerLine == "list":
+			running := orch.ListRunning()
+			if len(running) == 0 {
 				fmt.Fprintln(out, "No agents are currently running.")
 			} else {
-				fmt.Fprintf(out, "Running agents (%d): %s\n", len(agents), strings.Join(agents, ", "))
+				fmt.Fprintf(out, "Running agents (%d): %s\n", len(running), strings.Join(running, ", "))
 			}
 
-		case "status":
-			agents := orch.ListRunning()
-			if len(agents) == 0 {
+		case lowerLine == "status":
+			running := orch.ListRunning()
+			if len(running) == 0 {
 				fmt.Fprintln(out, "No agents are currently running.")
 			} else {
 				fmt.Fprintln(out, "Agent Status:")
-				for _, name := range agents {
+				for _, name := range running {
 					mem := orch.GetAgentMemory(name)
 					turns := 0
 					if mem != nil {
@@ -100,11 +149,86 @@ func RunConsole(
 				}
 			}
 
+		case strings.HasPrefix(lowerLine, "connect"):
+			if cfg.Vault == nil {
+				fmt.Fprintln(out, "Credential vault not available in this session.")
+				continue
+			}
+			parts := strings.Fields(line)
+			targetApp := ""
+			if len(parts) > 1 {
+				targetApp = parts[1]
+			}
+			if err := wizard.RunConnectWizard(in, out, cfg.Vault, targetApp); err != nil {
+				fmt.Fprintf(out, "Connect wizard error: %v\n", err)
+			}
+
+		case lowerLine == "config":
+			if cfg.Registry == nil || cfg.AgentsDir == "" {
+				fmt.Fprintln(out, "Agent configuration not available in this session.")
+				continue
+			}
+			if err := wizard.RunConfigWizard(in, out, cfg.Registry, cfg.AgentsDir); err != nil {
+				fmt.Fprintf(out, "Config wizard error: %v\n", err)
+			}
+
+		case strings.HasPrefix(lowerLine, "agent create ") || strings.HasPrefix(lowerLine, "create agent "):
+			if cfg.Registry == nil || cfg.AgentsDir == "" {
+				fmt.Fprintln(out, "Agent registry not available in this session.")
+				continue
+			}
+			parts := strings.Fields(line)
+			if len(parts) < 3 {
+				fmt.Fprintln(out, "Usage: agent create <name>")
+				continue
+			}
+			agentName := strings.ToLower(strings.TrimSpace(parts[2]))
+			createdPath, err := agents.CreateAgentYAML(cfg.AgentsDir, agents.AgentConfig{
+				Name:         agentName,
+				Description:  fmt.Sprintf("Autonomous agent '%s' created via console", agentName),
+				SystemPrompt: fmt.Sprintf("You are %s, an autonomous multi-platform agent equipped with ClawBridge tools.", agentName),
+				Model:        "gemini-1.5-flash",
+				Permissions:  []string{"*"},
+			})
+			if err != nil {
+				fmt.Fprintf(out, "Failed to create agent configuration: %v\n", err)
+				continue
+			}
+			if _, _, err := cfg.Registry.RegisterAgent(agentName, []string{"*"}); err != nil {
+				fmt.Fprintf(out, "Failed to register agent in vault: %v\n", err)
+				continue
+			}
+			fmt.Fprintf(out, "Created agent '%s' configuration at %s\n", agentName, createdPath)
+
+			// Dynamically start agent in active orchestrator
+			if err := orch.StartAgent(ctx, agentName); err != nil {
+				fmt.Fprintf(out, "Warning: agent created but failed to start: %v\n", err)
+			} else {
+				fmt.Fprintf(out, "Agent '%s' is now running and ready for instructions.\n", agentName)
+			}
+
+		case strings.HasPrefix(lowerLine, "run ") || strings.HasPrefix(lowerLine, "start "):
+			parts := strings.Fields(line)
+			if len(parts) < 2 {
+				fmt.Fprintln(out, "Usage: run <agent_name>")
+				continue
+			}
+			agentName := strings.ToLower(strings.TrimSpace(parts[1]))
+			if orch.IsRunning(agentName) {
+				fmt.Fprintf(out, "Agent '%s' is already running.\n", agentName)
+				continue
+			}
+			if err := orch.StartAgent(ctx, agentName); err != nil {
+				fmt.Fprintf(out, "Failed to start agent '%s': %v\n", agentName, err)
+			} else {
+				fmt.Fprintf(out, "Agent '%s' is now running.\n", agentName)
+			}
+
 		default:
 			// Parse <target>: <task>
 			parts := strings.SplitN(line, ":", 2)
 			if len(parts) != 2 {
-				fmt.Fprintln(out, "Unknown command format. Use '<agent>: <task>' or 'broadcast: <task>'. Type 'help' for details.")
+				fmt.Fprintf(out, "Unknown command: '%s'. Use '<agent>: <task>', 'connect', 'config', 'agent create <name>', or type 'help'.\n", line)
 				continue
 			}
 
