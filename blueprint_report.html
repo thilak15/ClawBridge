@@ -1,0 +1,1421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PreFlight Blueprint — ClawBridge</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #0b0f19;
+    --panel: #111827;
+    --panel-alt: #1f2937;
+    --border: #374151;
+    --text: #f3f4f6;
+    --muted: #9ca3af;
+    --accent: #38bdf8;
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+    line-height: 1.6;
+    padding: 2rem;
+  }
+  .container { max-width: 1280px; margin: 0 auto; }
+  header {
+    background: linear-gradient(135deg, #111827 0%, #1e293b 100%);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+  .title-group h1 { font-size: 2rem; letter-spacing: -0.02em; margin-bottom: 0.4rem; }
+  .title-group p { color: var(--muted); max-width: 760px; }
+  .meta-row { margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+  .stack-pill {
+    background: #1e293b;
+    border: 1px solid #334155;
+    color: var(--accent);
+    padding: 0.2rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+  .score-box {
+    background: #0f172a;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    text-align: right;
+    min-width: 240px;
+  }
+  .score-number { font-size: 2.5rem; font-weight: 800; color: #10b981; line-height: 1.1; }
+  .score-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  .copy-btn {
+    margin-top: 0.75rem;
+    background: #1e293b;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 0.4rem 0.85rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+  .copy-btn:hover { background: var(--accent); color: #0f172a; }
+  .tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .tab-btn {
+    background: var(--panel);
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 0.55rem 1.1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9rem;
+    transition: all 0.15s ease;
+  }
+  .tab-btn.active, .tab-btn:hover {
+    color: var(--text);
+    border-color: var(--accent);
+    background: #1e293b;
+  }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 1rem; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+  }
+  .dim-header, .crit-header, .pp-header, .adr-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    gap: 0.5rem;
+  }
+  .dim-title { font-weight: 700; font-size: 1.05rem; }
+  .dim-score { font-weight: 700; font-size: 0.9rem; }
+  .progress-track {
+    width: 100%;
+    height: 8px;
+    background: #1f2937;
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 0.75rem;
+  }
+  .progress-fill { height: 100%; border-radius: 999px; }
+  .edge-list { margin-top: 0.6rem; padding-left: 1.2rem; color: var(--muted); font-size: 0.9rem; }
+  .badge {
+    padding: 0.15rem 0.55rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    margin-right: 0.4rem;
+  }
+  .badge-green { background: #10b98122; color: #34d399; border: 1px solid #10b98155; }
+  .badge-red { background: #ef444422; color: #f87171; border: 1px solid #ef444455; }
+  .badge-blue { background: #38bdf822; color: #38bdf8; border: 1px solid #38bdf855; }
+  table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; font-size: 0.92rem; }
+  th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 0.75rem; }
+  tr.graveyard-row { background: #ef44440a; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .muted { color: var(--muted); font-size: 0.9rem; }
+  .rejected { color: #fca5a5; margin-top: 0.35rem; }
+  .comments-box {
+    margin-top: 0.65rem;
+    padding-top: 0.55rem;
+    border-top: 1px dashed var(--border);
+  }
+  .comment-quote {
+    font-size: 0.85rem;
+    color: #cbd5e1;
+    background: #0f172a;
+    padding: 0.45rem 0.65rem;
+    border-radius: 6px;
+    margin-top: 0.35rem;
+    border-left: 3px solid var(--accent);
+  }
+  .mermaid-box {
+    background: #0f172a;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.5rem;
+    overflow-x: auto;
+    margin-top: 0.75rem;
+  }
+  details.raw-mermaid { margin-top: 0.5rem; font-size: 0.82rem; color: var(--muted); }
+  details.raw-mermaid pre {
+    background: #0b0f19;
+    padding: 0.75rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    margin-top: 0.35rem;
+    color: #e2e8f0;
+    overflow-x: auto;
+  }
+  .step-list { padding-left: 1.4rem; }
+  .step-list li { margin-bottom: 0.6rem; }
+  h2.section-title { font-size: 1.35rem; margin: 1.25rem 0 0.75rem; color: #e2e8f0; }
+</style>
+</head>
+<body>
+<div class="container">
+  
+  <header>
+    <div class="title-group">
+      <div class="score-label">PREFLIGHT ARCHITECTURE &amp; PRIOR-ART BLUEPRINT</div>
+      <h1>ClawBridge</h1>
+      <p>Unified agent connector gateway and secure credential vault bridging autonomous agents to social apps and outbound workplace channels</p>
+      <div class="meta-row">
+        <span class="stack-pill">Runtime: Python 3.11+ / TypeScript</span>
+        <span class="stack-pill">FastAPI</span><span class="stack-pill">SQLite WAL / PostgreSQL</span><span class="stack-pill">AES-GCM / Vault</span><span class="stack-pill">Redis</span><span class="stack-pill">Model Context Protocol (MCP)</span>
+      </div>
+    </div>
+    <div class="score-box">
+      <div class="score-label">READINESS GATE PASSED</div>
+      <div class="score-number">100%</div>
+      <div class="muted">Evidence-Verified Rubric</div>
+      <button class="copy-btn" onclick="copySpecMarkdown(this)">Copy Spec Markdown (.preflight/SPEC.md)</button>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="showTab('tab-scorecard', this)">1. Readiness &amp; Red-Team</button>
+    <button class="tab-btn" onclick="showTab('tab-prior-art', this)">2. Prior-Art &amp; Pain Points (35)</button>
+    <button class="tab-btn" onclick="showTab('tab-tooling-memory', this)">3. Stack Explained &amp; Memory (15)</button>
+    <button class="tab-btn" onclick="showTab('tab-design', this)">4. System Topology &amp; Sequence</button>
+    <button class="tab-btn" onclick="showTab('tab-ledger', this)">5. Decision Ledger (4) &amp; Plan</button>
+  </div>
+
+  <!-- TAB 1: SCORECARD & RED TEAM -->
+  <section id="tab-scorecard" class="tab-panel active">
+    <h2 class="section-title">5-Dimension Grilling Scorecard</h2>
+    <div class="grid-2">
+      
+            <div class="card dim-card">
+                <div class="dim-header">
+                    <span class="dim-title">Problem &amp; User Pain</span>
+                    <span class="dim-score" style="color:#10b981">20/20 (stress-tested)</span>
+                </div>
+                <div class="progress-track">
+                    <div class="progress-fill" style="width:100%; background:#10b981"></div>
+                </div>
+                <p class="dim-summary">Autonomous agents lack a unified, secure egress and ingress bridge, causing fragmented credentials management, leaked OAuth tokens, and fragile custom integrations across social platforms and enterprise services.</p>
+                <ul class="edge-list"><li>Agent compromises or prompt injections attempting to extract raw third-party access tokens or OAuth refresh credentials directly via tool calls.</li><li>Downstream platform API schema drift or sudden credential expiration during an active multi-step autonomous agent workflow.</li></ul>
+            </div>
+            
+            <div class="card dim-card">
+                <div class="dim-header">
+                    <span class="dim-title">Scope &amp; Non-Goals</span>
+                    <span class="dim-score" style="color:#10b981">20/20 (stress-tested)</span>
+                </div>
+                <div class="progress-track">
+                    <div class="progress-fill" style="width:100%; background:#10b981"></div>
+                </div>
+                <p class="dim-summary">Deliver a unified bidirectional bridge supporting outbound egress tool invocation across social and enterprise APIs, secure credential vaulting, and inbound webhook event normalization into agent SSE streams; non-goals include LLM orchestration, model hosting, or general ETL data pipelines.</p>
+                <ul class="edge-list"><li>High-frequency inbound webhook bursts (e.g. Slack mentions flood or GitHub push storms) overwhelming agent SSE listeners.</li><li>Agent attempting destructive administrative actions outside its assigned scoped permission policy.</li></ul>
+            </div>
+            
+            <div class="card dim-card">
+                <div class="dim-header">
+                    <span class="dim-title">State, Memory &amp; Agent Communication</span>
+                    <span class="dim-score" style="color:#10b981">20/20 (stress-tested)</span>
+                </div>
+                <div class="progress-track">
+                    <div class="progress-fill" style="width:100%; background:#10b981"></div>
+                </div>
+                <p class="dim-summary">Zero-overhead encrypted SQLite WAL database managing per-agent credentials, scoped permissions, and event logs with just-in-time AES-256-GCM token decryption and single-flight token rotation.</p>
+                <ul class="edge-list"><li>Multiple concurrent agent threads attempting to read/write credentials during an active OAuth token expiration window.</li><li>Master encryption key rotation requiring re-encryption of all stored channel secrets without downtime.</li></ul>
+            </div>
+            
+            <div class="card dim-card">
+                <div class="dim-header">
+                    <span class="dim-title">Bottlenecks &amp; Failure Modes</span>
+                    <span class="dim-score" style="color:#10b981">20/20 (stress-tested)</span>
+                </div>
+                <div class="progress-track">
+                    <div class="progress-fill" style="width:100%; background:#10b981"></div>
+                </div>
+                <p class="dim-summary">Downstream platform API rate limiting (HTTP 429s), token expiration cascades, network latency jitter, and unhandled tool error propagation are prevented via token-bucket throttlers and normalized JSON error structures.</p>
+                <ul class="edge-list"><li>Sudden burst of 50+ concurrent agent tool dispatches hitting Twitter/X API tier limits, requiring queuing with exponential jitter backoff.</li><li>Downstream service outage (e.g. Slack API degradation returning 503) intercepted and formatted as recoverable retryable errors rather than unhandled socket crashes.</li></ul>
+            </div>
+            
+            <div class="card dim-card">
+                <div class="dim-header">
+                    <span class="dim-title">Prior-Art Differentiation</span>
+                    <span class="dim-score" style="color:#10b981">20/20 (stress-tested)</span>
+                </div>
+                <div class="progress-track">
+                    <div class="progress-fill" style="width:100%; background:#10b981"></div>
+                </div>
+                <p class="dim-summary">Unlike general workflow automation platforms like n8n-io/n8n or monolithic CLI tools like google-gemini/gemini-cli, ClawBridge is a dedicated zero-trust egress and ingress gateway leveraging modelcontextprotocol/servers to isolate raw credentials from agents while providing robust error recovery and rate-limiting.</p>
+                <ul class="edge-list"><li>Agent requesting batch operations across multiple platforms (e.g. cross-posting an announcement to Twitter, Slack, and LinkedIn simultaneously) with partial failure isolation.</li><li>Migration of existing agent integrations from raw platform REST clients to ClawBridge&#x27;s normalized MCP tool schema without breaking agent prompts.</li></ul>
+            </div>
+            
+    </div>
+    <h2 class="section-title">Adversarial Red-Team Critique</h2>
+    
+                <div class="card critique-card" style="border-left: 4px solid #ef4444">
+                    <div class="crit-header">
+                        <h4>OAuth Token Refresh Stampede</h4>
+                        <span class="badge" style="background:#ef444422; color:#ef4444; border:1px solid #ef444455">CRITICAL</span>
+                    </div>
+                    <p><strong>Failure Mode / Attack Vector:</strong> When multiple agents simultaneously dispatch requests through an expired OAuth token, concurrent refresh requests hit the identity provider (e.g. Slack/X), invalidating the refresh token and locking out all agents.</p>
+                    <p><strong>Architectural Mitigation:</strong> Implement single-flight distributed mutex per credential ID in memory so only one refresh call executes while others await the updated access token.</p>
+                </div>
+                
+                <div class="card critique-card" style="border-left: 4px solid #f97316">
+                    <div class="crit-header">
+                        <h4>Inbound Webhook Replay &amp; Spoofing</h4>
+                        <span class="badge" style="background:#f9731622; color:#f97316; border:1px solid #f9731655">HIGH</span>
+                    </div>
+                    <p><strong>Failure Mode / Attack Vector:</strong> An adversary intercepts a valid webhook from Jira or Slack and replays it repeatedly, triggering costly automated agent loops or unauthorized state changes.</p>
+                    <p><strong>Architectural Mitigation:</strong> Enforce platform HMAC-SHA256 signature verification, a strict 300-second timestamp freshness window, and SQLite-backed deduplication on webhook delivery IDs.</p>
+                </div>
+                
+                <div class="card critique-card" style="border-left: 4px solid #f97316">
+                    <div class="crit-header">
+                        <h4>Agent Privilege Escalation via Unscoped Tool Dispatch</h4>
+                        <span class="badge" style="background:#f9731622; color:#f97316; border:1px solid #f9731655">HIGH</span>
+                    </div>
+                    <p><strong>Failure Mode / Attack Vector:</strong> A lightweight agent (e.g. read-only social monitor) invokes destructive tools (e.g. Jira issue deletion or Slack workspace admin endpoints) using the shared bridge.</p>
+                    <p><strong>Architectural Mitigation:</strong> Enforce per-agent Access Control Lists (ACLs) mapped to Agent Identity tokens, rejecting unauthorized tool calls before platform dispatch.</p>
+                </div>
+                
+  </section>
+
+  <!-- TAB 2: PRIOR ART & PAIN POINTS -->
+  <section id="tab-prior-art" class="tab-panel">
+    <h2 class="section-title">GitHub Prior-Art Matrix (Active Incumbents vs. Graveyard / Dormant Repos)</h2>
+    <div class="card" style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Repository</th>
+            <th>Stars</th>
+            <th>Velocity</th>
+            <th>Last Push</th>
+            <th>Classification</th>
+            <th>Summary</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+            <tr>
+                <td><a href="https://github.com/n8n-io/n8n" target="_blank" rel="noopener">n8n-io/n8n</a></td>
+                <td>⭐ 208,851</td>
+                <td>2333.53/mo</td>
+                <td>0d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>Fair-code workflow automation platform with native AI capabilities. Combine visual building with custom code, self-host or cloud, 400+ integrations.</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/google-gemini/gemini-cli" target="_blank" rel="noopener">google-gemini/gemini-cli</a></td>
+                <td>⭐ 108,592</td>
+                <td>5838.28/mo</td>
+                <td>0d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>An open-source AI agent that brings the power of Gemini directly into your terminal.</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/D4Vinci/Scrapling" target="_blank" rel="noopener">D4Vinci/Scrapling</a></td>
+                <td>⭐ 90,131</td>
+                <td>3634.31/mo</td>
+                <td>0d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>🕷️ The BEST Web Scraping framework that handles everything from a single request to a full-scale crawl! Don&#x27;t be shy, join here: https://discord.gg/EMgGbDceNQ and follow here for daily tips and tricks: https://x.com/Scrapling_dev</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/koala73/worldmonitor" target="_blank" rel="noopener">koala73/worldmonitor</a></td>
+                <td>⭐ 89,702</td>
+                <td>9215.96/mo</td>
+                <td>0d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>Real-time global intelligence dashboard. AI-powered news aggregation, geopolitical monitoring, and infrastructure tracking in a unified situational awareness interface</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/ruvnet/ruflo" target="_blank" rel="noopener">ruvnet/ruflo</a></td>
+                <td>⭐ 79,868</td>
+                <td>4679.77/mo</td>
+                <td>0d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>🌊 The original agent harness. Deploy intelligent multi-player swarms, coordinate autonomous workflows, and build conversational AI systems. Features adaptive memory, self-learning intelligence, federation, vector RAG integration, and native Claude Code / Codex / Hermes and many more Integrated</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/upstash/context7" target="_blank" rel="noopener">upstash/context7</a></td>
+                <td>⭐ 63,818</td>
+                <td>3300.93/mo</td>
+                <td>0d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>Context7 Platform -- Up-to-date docs for AI agents</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/sansan0/TrendRadar" target="_blank" rel="noopener">sansan0/TrendRadar</a></td>
+                <td>⭐ 63,254</td>
+                <td>3469.14/mo</td>
+                <td>7d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>⭐AI-driven public opinion &amp; trend monitor with multi-platform aggregation, RSS, and smart alerts.🎯 告别信息过载，你的 AI 舆情监控助手与热点筛选工具！聚合多平台热点 +  RSS 订阅，支持关键词精准筛选。AI 智能筛选新闻 + AI 翻译 +  AI 分析简报直推手机，也支持接入 MCP 架构，赋能 AI 自然语言对话分析、情感洞察与趋势预测等。支持 Docker ，数据本地/云端自持。集成微信/飞书/钉钉/Telegram/邮件/ntfy/bark/slack 等渠道智能推送。</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/ChromeDevTools/chrome-devtools-mcp" target="_blank" rel="noopener">ChromeDevTools/chrome-devtools-mcp</a></td>
+                <td>⭐ 54,337</td>
+                <td>3956.58/mo</td>
+                <td>0d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>Chrome DevTools for coding agents</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/DeusData/codebase-memory-mcp" target="_blank" rel="noopener">DeusData/codebase-memory-mcp</a></td>
+                <td>⭐ 47,695</td>
+                <td>5840.2/mo</td>
+                <td>0d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>Local code intelligence for developers and AI agents. Connect code, docs and infrastructure in a persistent graph, with CBM Lens, MCP tools, agent integrations and change-aware test selection.</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/reactive-resume/reactive-resume" target="_blank" rel="noopener">reactive-resume/reactive-resume</a></td>
+                <td>⭐ 44,982</td>
+                <td>560.64/mo</td>
+                <td>0d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>A one-of-a-kind resume builder that keeps your privacy in mind. Completely secure, customizable, portable, open-source and free forever. Try it out today!</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/bytedance/UI-TARS-desktop" target="_blank" rel="noopener">bytedance/UI-TARS-desktop</a></td>
+                <td>⭐ 39,421</td>
+                <td>1827.87/mo</td>
+                <td>19d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>The Open-Source Multimodal AI Agent Stack: Connecting Cutting-Edge AI Models and Agent Infra</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/DayuanJiang/next-ai-draw-io" target="_blank" rel="noopener">DayuanJiang/next-ai-draw-io</a></td>
+                <td>⭐ 36,459</td>
+                <td>1876.11/mo</td>
+                <td>0d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>Draw and edit draw.io diagrams by chatting with an AI. Web app, desktop app, and an MCP server for Claude Code, Cursor, Codex and VS Code.</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/github/github-mcp-server" target="_blank" rel="noopener">github/github-mcp-server</a></td>
+                <td>⭐ 34,027</td>
+                <td>1695.7/mo</td>
+                <td>0d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>GitHub&#x27;s official MCP Server</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/mksglu/context-mode" target="_blank" rel="noopener">mksglu/context-mode</a></td>
+                <td>⭐ 32,625</td>
+                <td>3962.55/mo</td>
+                <td>0d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>Context window optimization for AI coding agents. Sandboxes tool output (98% reduction), persists session memory, and   enforces routing across 17 platforms via MCP + hooks.</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/oraios/serena" target="_blank" rel="noopener">oraios/serena</a></td>
+                <td>⭐ 30,800</td>
+                <td>1584.91/mo</td>
+                <td>0d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>A powerful MCP toolkit for coding, providing semantic retrieval and editing capabilities  - the IDE for your agent</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/assafelovic/gpt-researcher" target="_blank" rel="noopener">assafelovic/gpt-researcher</a></td>
+                <td>⭐ 30,332</td>
+                <td>719.34/mo</td>
+                <td>17d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>An autonomous agent that conducts deep research on any data using any LLM providers</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/agentic-community/mcp-gateway-registry" target="_blank" rel="noopener">agentic-community/mcp-gateway-registry</a></td>
+                <td>⭐ 1,020</td>
+                <td>59.3/mo</td>
+                <td>0d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>Enterprise-ready MCP Gateway &amp; Registry that centralizes AI development tools with secure OAuth authentication, dynamic tool discovery, and unified access for both autonomous AI agents and AI coding assistants. Transform scattered MCP server chaos into governed, auditable tool access with Keycloak/Entra integration.</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/MikkoParkkola/mcp-gateway" target="_blank" rel="noopener">MikkoParkkola/mcp-gateway</a></td>
+                <td>⭐ 85</td>
+                <td>9.24/mo</td>
+                <td>0d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>Unlimited MCP servers, tools and APIs. One fixed context cost. Plug every tool you own into Claude, Cursor, Codex or any MCP client: your agent sees a handful, finds the rest on demand, and never drowns in tool definitions. Self-hosted MCP gateway and proxy in one Rust binary, 100+ API integrations built in, one-command import of existing servers.</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/asashiki/mcp-switch" target="_blank" rel="noopener">asashiki/mcp-switch</a></td>
+                <td>⭐ 23</td>
+                <td>5.07/mo</td>
+                <td>36d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>Self-hosted gateway that aggregates local stdio and remote HTTP MCP servers behind one OAuth endpoint — connect once, reach all your tools from any AI.</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/wellknownmcp/cortex-gateway" target="_blank" rel="noopener">wellknownmcp/cortex-gateway</a></td>
+                <td>⭐ 12</td>
+                <td>3.1/mo</td>
+                <td>1d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>Federated MCP gateway: one OAuth 2.1-protected, spec-compliant MCP server in front of all your apps. Backends stay plain HTTP (~120-line contract) or proxied native MCP servers with a per-user token vault. Scope-filtered tools, live discovery, audit trail. Give agents curated, governed access to your whole stack — one URL, one token.</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/crunchtools/trentina" target="_blank" rel="noopener">crunchtools/trentina</a></td>
+                <td>⭐ 11</td>
+                <td>1.42/mo</td>
+                <td>0d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>MCP gateway between AI agents and their tools, the web and Matrix: three-layer prompt-injection defense, smaller tool lists and responses, gateway-enforced parameter and response guards, OAuth/DCR, and per-agent profiles</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/red-orbita/bulwark-gateway" target="_blank" rel="noopener">red-orbita/bulwark-gateway</a></td>
+                <td>⭐ 7</td>
+                <td>1.44/mo</td>
+                <td>1d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>Security guardrail proxy for AI agents and LLM backends. Multi-tenant policy enforcement, prompt-injection detection, tool controls, sensitive-data filtering, and SIEM integration.</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/Soflutionltd/McpHub" target="_blank" rel="noopener">Soflutionltd/McpHub</a></td>
+                <td>⭐ 7</td>
+                <td>0.82/mo</td>
+                <td>0d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>Secure MCP gateway for Cursor, Claude and VS Code: 3 tools instead of hundreds (-99.9% tokens), code mode, macOS sandbox, tool pinning, OAuth in the Keychain. Single Rust binary.</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/tomeai/weclaw" target="_blank" rel="noopener">tomeai/weclaw</a></td>
+                <td>⭐ 7</td>
+                <td>0.52/mo</td>
+                <td>238d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>Enterprise-ready MCP Gateway &amp; Registry — unify AI development tools with secure OAuth, dynamic tool discovery, and seamless access for both autonomous agents and coding assistants.</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/cmer/mcp-switchboard" target="_blank" rel="noopener">cmer/mcp-switchboard</a></td>
+                <td>⭐ 5</td>
+                <td>1.53/mo</td>
+                <td>1d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>Self-hosted MCP gateway for coding agents — one place for all your MCP servers, one endpoint per agent, per-agent tool switchboard with OAuth handled for you.</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/aws-samples/sample-bedrock-agentcore-gateway-user-federation" target="_blank" rel="noopener">aws-samples/sample-bedrock-agentcore-gateway-user-federation</a></td>
+                <td>⭐ 4</td>
+                <td>0.43/mo</td>
+                <td>189d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>Expose OAuth 2.0-secured APIs as MCP tools for AI agents while preserving user authentication context using Amazon Bedrock AgentCore Gateway Interceptors</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/hguerrero/kong-mcp-gateway-examples" target="_blank" rel="noopener">hguerrero/kong-mcp-gateway-examples</a></td>
+                <td>⭐ 2</td>
+                <td>0.23/mo</td>
+                <td>225d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>Kong Gateway + Model Context Protocol (MCP) integration examples. Convert REST APIs to AI-accessible tools, proxy MCP servers, and build intelligent agents.</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/mikesmullin/ai-demo1" target="_blank" rel="noopener">mikesmullin/ai-demo1</a></td>
+                <td>⭐ 2</td>
+                <td>0.29/mo</td>
+                <td>195d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>Pydantic AI + OAuth + AI Gateway (LLM Inference, MCP Tools) + OTel + Grafana Tempo</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/cyt-666/mcp-vault" target="_blank" rel="noopener">cyt-666/mcp-vault</a></td>
+                <td>⭐ 2</td>
+                <td>0.86/mo</td>
+                <td>17d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>Self-hosted Obsidian Vault gateway in Rust: WebDAV sync plus secure MCP tools for AI agents to discover, search, recall, read, and safely write notes. Includes OAuth/PKCE for ChatGPT, revision-safe history, Vault-scoped auth, optional hybrid retrieval, and durable Markdown memories.</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/suhasagg/muse-universal-api-connector" target="_blank" rel="noopener">suhasagg/muse-universal-api-connector</a></td>
+                <td>⭐ 2</td>
+                <td>2.0/mo</td>
+                <td>25d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>Meta Muse Universal API Connector | Production connector gateway for AI agents with REST APIs, OpenAPI discovery, OAuth, MCP, dynamic tool generation, permissions, credential security, policy enforcement and secure API execution.</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/recklessop/torii" target="_blank" rel="noopener">recklessop/torii</a></td>
+                <td>⭐ 2</td>
+                <td>0.79/mo</td>
+                <td>62d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>Self-hosted OAuth 2.1 gateway for your MCP servers: tool-level RBAC (default-deny, no admin bypass), audit trail, and a credential GUI. Your upstreams become LAN-only services behind one authenticated front door.</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/tfohlmeister/convex-mcp-gateway-demo" target="_blank" rel="noopener">tfohlmeister/convex-mcp-gateway-demo</a></td>
+                <td>⭐ 1</td>
+                <td>0.19/mo</td>
+                <td>7d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>Notes-app demo for convex-mcp-gateway: Convex functions as MCP tools, with auth, audit, and OAuth bridge.</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/codewithpassion/workspace-mcp-cf" target="_blank" rel="noopener">codewithpassion/workspace-mcp-cf</a></td>
+                <td>⭐ 1</td>
+                <td>0.25/mo</td>
+                <td>36d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>Multi-tenant Google Workspace MCP gateway on Cloudflare Workers (121 tools, Clerk auth, per-config Google OAuth)</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/mazze93/github-mcp-gateway" target="_blank" rel="noopener">mazze93/github-mcp-gateway</a></td>
+                <td>⭐ 1</td>
+                <td>0.28/mo</td>
+                <td>0d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>Self-hosted remote MCP server on Cloudflare Workers — GitHub App OAuth 2.1 gateway (PKCE, DCR, CIMD) exposing 21 repo/issue/PR/contents/search tools to Claude Code, Claude.ai, and any MCP client</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/suhasagg/Connector-Gateway" target="_blank" rel="noopener">suhasagg/Connector-Gateway</a></td>
+                <td>⭐ 1</td>
+                <td>1.0/mo</td>
+                <td>25d ago</td>
+                <td><span class="badge badge-green">Active Incumbent</span></td>
+                <td>Enterprise AI Connector Gateway &amp; MCP Gateway | Secure SaaS connectors, OAuth, credential vault, tool discovery, policy enforcement, multi-tenant routing, MCP tools, audit logs and governed AI agent integrations.</td>
+            </tr>
+            
+        </tbody>
+      </table>
+    </div>
+
+    <h2 class="section-title">Pain-Point Mine (Verified Bugs &amp; Top-Voted Open Issues + Top Comments)</h2>
+    <div class="grid-2">
+      
+            <div class="card pp-card">
+                <div class="pp-header">
+                    <div>
+                        <span class="badge badge-red">BUG / FAILURE</span>
+                        <a href="https://github.com/google-gemini/gemini-cli/issues/28625" target="_blank" rel="noopener" class="pp-link">
+                            google-gemini/gemini-cli#28625
+                        </a>
+                    </div>
+                    <span class="pp-metric">👍 58 &nbsp;|&nbsp; 💬 3</span>
+                </div>
+                <h4>Enterprise Gemini CLI users were promised access to the latest models — so where are Gemini 3.5 Flash and 3.6 Flash?</h4>
+                <p class="muted">During the Gemini CLI migration announcement on May 19, 2026, Google explicitly stated: &gt; “If your organization uses Gemini CLI or our IDE extensions via a Gemini Code Assist Standard or Enterprise license, your access remains unchanged. We’ll continue to support Gemini CLI and G...</p>
+                <div class="comments-box"><div class="comment-quote"><strong>@Zhu-Aemon</strong> (👍 0): Gemini 3.7 Flash is out and we still can&#x27;t even access Gemini 3.1 Pro. This project is a huge spam.</div><div class="comment-quote"><strong>@Gerry9000</strong> (👍 0): A data point that may narrow this: the gap is not confined to Code Assist licensing. We hit the identical behaviour on plain `gemini-api-key` auth — no Code Assist Standard or Enterprise involved. `gemini-3.6-flash`, `gemini-3.7-flash` and ...</div></div>
+            </div>
+            
+            <div class="card pp-card">
+                <div class="pp-header">
+                    <div>
+                        <span class="badge badge-red">BUG / FAILURE</span>
+                        <a href="https://github.com/google-gemini/gemini-cli/issues/13852" target="_blank" rel="noopener" class="pp-link">
+                            google-gemini/gemini-cli#13852
+                        </a>
+                    </div>
+                    <span class="pp-metric">👍 16 &nbsp;|&nbsp; 💬 15</span>
+                </div>
+                <h4>`GEMINI.md` instructions are ignored</h4>
+                <p class="muted">### What happened? Gemini-3-pro fails to adhere to instructions in `GEMINI.md`. In the linked session the gemini file instructs the model not to create python scripts but to invoke them directly on the command line instead. This is ignored and the model tries to write a file. Whe...</p>
+                <div class="comments-box"><div class="comment-quote"><strong>@zebra2023</strong> (👍 5): The Gemini model tend to ignore rules; also, using copilot with the Gemini model, it ignores some rules or just says I followed them and it did not.</div><div class="comment-quote"><strong>@tavasti</strong> (👍 1): I am also experiencing this issue. I have in my GEMINI.md disallowed making any changes before confirming plan is ok, have disallowed making extra refactoring without permission (to make git diffs readable and showing actual change), disall...</div></div>
+            </div>
+            
+            <div class="card pp-card">
+                <div class="pp-header">
+                    <div>
+                        <span class="badge badge-blue">TOP-VOTED</span>
+                        <a href="https://github.com/google-gemini/gemini-cli/issues/19532" target="_blank" rel="noopener" class="pp-link">
+                            google-gemini/gemini-cli#19532
+                        </a>
+                    </div>
+                    <span class="pp-metric">👍 110 &nbsp;|&nbsp; 💬 127</span>
+                </div>
+                <h4>Add gemini-3.1-pro-preview</h4>
+                <p class="muted">### What happened? gemini-3.1-pro-preview isn&#x27;t in the models list ### What did you expect to happen? gemini-3.1-pro-preview is in the models list ### Client information &lt;details&gt; &lt;summary&gt;Client Information&lt;/summary&gt; Run `gemini` to enter the interactive CLI, then run the `/abou...</p>
+                <div class="comments-box"><div class="comment-quote"><strong>@scidomino</strong> (👍 119): I assure you, we are working on it. :D</div><div class="comment-quote"><strong>@guidedways</strong> (👍 40): The marketing team needs to stay in sync with the CLI team or the otherway around &gt; Where you can access Gemini 3.1 Pro: Gemini 3.1 Pro is available starting today in &gt; preview in [Vertex AI](https://cloud.google.com/vertex-ai?e=48754805) a...</div></div>
+            </div>
+            
+            <div class="card pp-card">
+                <div class="pp-header">
+                    <div>
+                        <span class="badge badge-blue">TOP-VOTED</span>
+                        <a href="https://github.com/google-gemini/gemini-cli/issues/3132" target="_blank" rel="noopener" class="pp-link">
+                            google-gemini/gemini-cli#3132
+                        </a>
+                    </div>
+                    <span class="pp-metric">👍 50 &nbsp;|&nbsp; 💬 46</span>
+                </div>
+                <h4>[Agents] Post V1.0 Work</h4>
+                <p class="muted">### What would you like to be added? This FR requests the implementation of a new SubAgent class: A re-usable component that manages LLM driven tool orchestration. This is applicable in the following contexts: * Allowing a Tool to iteratively solve a problem it encounters. For ex...</p>
+                <div class="comments-box"><div class="comment-quote"><strong>@faw01</strong> (👍 60): surprised gemini cli doesn&#x27;t already have this! subagents are a big part of cc&#x27;s success</div><div class="comment-quote"><strong>@abhipatel12</strong> (👍 46): Hey @rome2o! We&#x27;ll start making updates on this thread soon! Def working on it!</div></div>
+            </div>
+            
+            <div class="card pp-card">
+                <div class="pp-header">
+                    <div>
+                        <span class="badge badge-blue">TOP-VOTED</span>
+                        <a href="https://github.com/n8n-io/n8n/issues/14361" target="_blank" rel="noopener" class="pp-link">
+                            n8n-io/n8n#14361
+                        </a>
+                    </div>
+                    <span class="pp-metric">👍 29 &nbsp;|&nbsp; 💬 57</span>
+                </div>
+                <h4>AI Agent doesn&#x27;t store the Tool usages in memory</h4>
+                <p class="muted">### Bug Description The current implementation of the AI Agent and the Memory nodes stores only the input and output messages, not the Tool messages. **Why is this important?** Have you noticed the agent claiming that it called a tool but didn&#x27;t? Despite the flaws of the models, ...</p>
+                <div class="comments-box"><div class="comment-quote"><strong>@GuillaumeRoy</strong> (👍 24): I&#x27;d suggest this should rank much higher than &quot;enhancement request&quot;. Consider this scenario: - You&#x27;re interacting with an agent. It creates a record in a data store at your request via a tool. Let&#x27;s say, saving a contact. This returns a con...</div><div class="comment-quote"><strong>@GuillaumeRoy</strong> (👍 15): Hi @Joffcom, Just want to bring this to your attention. In addition to the example I&#x27;ve given above, I am now seeing multiple models hallucinating tool calls due to this shortcoming. - User request leads to a tool call. - **Agent executes t...</div></div>
+            </div>
+            
+            <div class="card pp-card">
+                <div class="pp-header">
+                    <div>
+                        <span class="badge badge-blue">TOP-VOTED</span>
+                        <a href="https://github.com/n8n-io/n8n/issues/16005" target="_blank" rel="noopener" class="pp-link">
+                            n8n-io/n8n#16005
+                        </a>
+                    </div>
+                    <span class="pp-metric">👍 22 &nbsp;|&nbsp; 💬 13</span>
+                </div>
+                <h4>Bearer Authentication Not Working with HTTP Request Node Pagination</h4>
+                <p class="muted">### Bug Description When using the HTTP Request node with Bearer authentication and pagination enabled, the authorization header is not passed through, resulting in a 401 &quot;Unauthorized&quot; error. The same request works correctly without pagination enabled. ### To Reproduce 1. Create...</p>
+                <div class="comments-box"><div class="comment-quote"><strong>@ddean6232</strong> (👍 3): &gt; Hello team, +1 here. Without pagination everything works, but with pagination it always 401. Version 1.97.1. &gt; &gt; Also, would be good to have some REST logs to see what request the system sends and what responses receives (similar to Postm...</div><div class="comment-quote"><strong>@wesley-ferreti</strong> (👍 1): Same here, trying to integrate with Slack API to get history of conversations from a channel, but when I try to configure native pagination within the HTTP Request node, it doesn&#x27;t work. Slack has a cursor mechanism for pagnation, where the...</div></div>
+            </div>
+            
+            <div class="card pp-card">
+                <div class="pp-header">
+                    <div>
+                        <span class="badge badge-blue">TOP-VOTED</span>
+                        <a href="https://github.com/google-gemini/gemini-cli/issues/1982" target="_blank" rel="noopener" class="pp-link">
+                            google-gemini/gemini-cli#1982
+                        </a>
+                    </div>
+                    <span class="pp-metric">👍 15 &nbsp;|&nbsp; 💬 8</span>
+                </div>
+                <h4>Audio input instead of typing</h4>
+                <p class="muted">### What would you like to be added? Amazing work. But I would love to be able to talk with the agent instead of typing all the time. I use Copilot in VS Code most of the time, and it&#x27;s a feature that I love about it. Thanks. :) ### Why is this needed? Speaking is often faster th...</p>
+                
+            </div>
+            
+            <div class="card pp-card">
+                <div class="pp-header">
+                    <div>
+                        <span class="badge badge-blue">TOP-VOTED</span>
+                        <a href="https://github.com/n8n-io/n8n/issues/36972" target="_blank" rel="noopener" class="pp-link">
+                            n8n-io/n8n#36972
+                        </a>
+                    </div>
+                    <span class="pp-metric">👍 8 &nbsp;|&nbsp; 💬 13</span>
+                </div>
+                <h4>Regression in 2.36.5 — Mistral Chat Model node fails with &quot;Failed to parse URL from [object Request]&quot; (works in 2.35.4)</h4>
+                <p class="muted">### Bug Description Every call through the Mistral Cloud Chat Model node (`@n8n/n8n-nodes-langchain.lmChatMistralCloud`, typeVersion 1) fails immediately on n8n Cloud 2.36.5. The same workflow, with the same API key and the same model, works correctly on a second n8n Cloud instan...</p>
+                
+            </div>
+            
+            <div class="card pp-card">
+                <div class="pp-header">
+                    <div>
+                        <span class="badge badge-blue">TOP-VOTED</span>
+                        <a href="https://github.com/n8n-io/n8n/issues/25360" target="_blank" rel="noopener" class="pp-link">
+                            n8n-io/n8n#25360
+                        </a>
+                    </div>
+                    <span class="pp-metric">👍 8 &nbsp;|&nbsp; 💬 10</span>
+                </div>
+                <h4>Timeout setting does not work for Ollama node when it takes more than 5 minutes</h4>
+                <p class="muted">### Bug Description Whenever there is an Ollama node in the execution flow, if for some reason the request takes more than 5 minutes, it always fails regardless of the following settings on n8n env: ``` N8N_AI_TIMEOUT=36000000 N8N_AI_TIMEOUT_MAX=36000000 EXECUTIONS_TIMEOUT_MAX=36...</p>
+                
+            </div>
+            
+            <div class="card pp-card">
+                <div class="pp-header">
+                    <div>
+                        <span class="badge badge-blue">TOP-VOTED</span>
+                        <a href="https://github.com/n8n-io/n8n/issues/24042" target="_blank" rel="noopener" class="pp-link">
+                            n8n-io/n8n#24042
+                        </a>
+                    </div>
+                    <span class="pp-metric">👍 7 &nbsp;|&nbsp; 💬 17</span>
+                </div>
+                <h4>AI Agent node: Tool node errors fail workflow instead of returning error to agent for handling</h4>
+                <p class="muted">### Bug Description When using the AI Agent node with tool nodes (e.g., Jira tools), any error returned by the tool causes the entire workflow to fail immediately. The error is not passed back to the AI Agent for processing, which prevents the agent from implementing error-handli...</p>
+                
+            </div>
+            
+            <div class="card pp-card">
+                <div class="pp-header">
+                    <div>
+                        <span class="badge badge-blue">TOP-VOTED</span>
+                        <a href="https://github.com/koala73/worldmonitor/issues/1310" target="_blank" rel="noopener" class="pp-link">
+                            koala73/worldmonitor#1310
+                        </a>
+                    </div>
+                    <span class="pp-metric">👍 2 &nbsp;|&nbsp; 💬 31</span>
+                </div>
+                <h4>Feature request: Global Health Monitoring Dashboard (WHO / ECDC / PubMed feeds)</h4>
+                <p class="muted">### Feature area Map / Globe / Data layers ### Description ## Feature proposal: Global Health Monitoring Dashboard I would like to propose a feature idea for World Monitor. The idea is to create a **Health Monitoring Dashboard** that aggregates real-time signals from global publi...</p>
+                
+            </div>
+            
+            <div class="card pp-card">
+                <div class="pp-header">
+                    <div>
+                        <span class="badge badge-blue">TOP-VOTED</span>
+                        <a href="https://github.com/koala73/worldmonitor/issues/1227" target="_blank" rel="noopener" class="pp-link">
+                            koala73/worldmonitor#1227
+                        </a>
+                    </div>
+                    <span class="pp-metric">👍 2 &nbsp;|&nbsp; 💬 3</span>
+                </div>
+                <h4>Real-time streaming: SSE/WebSocket push for breaking news and alerts</h4>
+                <p class="muted">## Summary Upgrade from HTTP polling to Server-Sent Events (SSE) for real-time push of breaking news, alerts, and data updates to the browser. ## Current State All browser-to-backend communication uses HTTP polling via SmartPollLoop: - Telegram Intel: 60s polling - OREF Alerts: 1...</p>
+                
+            </div>
+            
+    </div>
+  </section>
+
+  <!-- TAB 3: STACK EXPLAINED, PROJECT MAINTENANCE & MEMORY ARCHITECTURE -->
+  <section id="tab-tooling-memory" class="tab-panel">
+    <h2 class="section-title">Stack Explained (What Job It Does, Why Needed, Alternative &amp; Now vs. Later)</h2>
+    <div class="card" style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Tool</th>
+            <th>Now / Later</th>
+            <th>What Job It Does</th>
+            <th>Why This Project Needs It</th>
+            <th>What the Alternative Was</th>
+            <th>Config Proof</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+                <tr>
+                    <td>
+                        <span class="badge badge-green">FastMCP / Model Context Protocol Python SDK</span>
+                        <div class="muted" style="font-size:0.78rem; margin-top:0.2rem">core-oss</div>
+                    </td>
+                    <td><span class="badge badge-green">NOW (Day 1)</span></td>
+                    <td><strong>Exposes standardized MCP tool schemas (stdio and SSE) for autonomous agents to discover and invoke downstream actions without custom API wrappers.</strong></td>
+                    <td>Standardizes agent integration across diverse platforms (NemoClaw, OpenClaw, Muse, Gemini) with zero custom protocol glue.</td>
+                    <td class="muted">Custom REST/GraphQL APIs (rejected because every agent would require custom client tool definitions rather than native MCP compatibility).</td>
+                    <td><span class="badge badge-red">Claimed / Unverified</span><div style="margin-top:0.2rem"><code>pyproject.toml ([project] PEP 621)</code></div></td>
+                </tr>
+                
+                <tr>
+                    <td>
+                        <span class="badge badge-green">SQLite (WAL mode) with Cryptography (AES-256-GCM)</span>
+                        <div class="muted" style="font-size:0.78rem; margin-top:0.2rem">storage-memory</div>
+                    </td>
+                    <td><span class="badge badge-green">NOW (Day 1)</span></td>
+                    <td><strong>Zero-overhead local encrypted store for per-agent credentials, platform OAuth tokens, audit logs, and inbound webhook event queues.</strong></td>
+                    <td>Ensures zero external infrastructure dependencies for local developers while securing tokens at rest with AES-GCM envelope encryption.</td>
+                    <td class="muted">HashiCorp Vault or AWS Secrets Manager (rejected for MVP due to external operational overhead and cloud lock-in).</td>
+                    <td><span class="badge badge-red">Claimed / Unverified</span><div style="margin-top:0.2rem"><code>pyproject.toml ([project] PEP 621)</code></div></td>
+                </tr>
+                
+                <tr>
+                    <td>
+                        <span class="badge badge-green">Authlib</span>
+                        <div class="muted" style="font-size:0.78rem; margin-top:0.2rem">core-oss</div>
+                    </td>
+                    <td><span class="badge badge-green">NOW (Day 1)</span></td>
+                    <td><strong>Manages OAuth 1.0a and OAuth 2.0 token refreshes, PKCE authorization flows, and JWT validation for third-party platforms.</strong></td>
+                    <td>Handles tricky multi-provider OAuth refresh lifecycles automatically to avoid mid-session 401 expiration failures.</td>
+                    <td class="muted">Custom OAuth refresh loops (rejected as error-prone across differing provider specs like Twitter vs Slack vs Jira).</td>
+                    <td><span class="badge badge-red">Claimed / Unverified</span><div style="margin-top:0.2rem"><code>pyproject.toml ([project] PEP 621)</code></div></td>
+                </tr>
+                
+                <tr>
+                    <td>
+                        <span class="badge badge-green">Docker (Dockerfile)</span>
+                        <div class="muted" style="font-size:0.78rem; margin-top:0.2rem">container-runtime</div>
+                    </td>
+                    <td><span class="badge badge-green">NOW (Day 1)</span></td>
+                    <td><strong>Containerizes the ClawBridge server and SQLite database for portable local daemon or cloud deployment.</strong></td>
+                    <td>Enables one-command spun up service accessible over stdio or Docker bridge network for multi-agent clusters.</td>
+                    <td class="muted">Bare-metal process running on host OS (rejected due to Python environment conflicts and permission isolation).</td>
+                    <td><span class="badge badge-green">Verified (scout:Dockerfile)</span><div style="margin-top:0.2rem"><code>Dockerfile</code></div></td>
+                </tr>
+                
+        </tbody>
+      </table>
+    </div>
+
+    <h2 class="section-title">Config Files Proven in Scouted Repos (pyproject.toml, Dockerfile, .github/workflows, .pre-commit-config.yaml)</h2>
+    <div class="card" style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Tool Proven</th>
+            <th>Config File Evidence</th>
+            <th>Observed In Scouted Repos</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+            <tr>
+                <td><span class="badge badge-blue">dependency-lock</span></td>
+                <td><strong>pnpm (pnpm-lock.yaml)</strong></td>
+                <td><code>pnpm-lock.yaml</code></td>
+                <td>n8n-io/n8n</td>
+            </tr>
+            
+            <tr>
+                <td><span class="badge badge-blue">container-runtime</span></td>
+                <td><strong>Dev Containers (.devcontainer)</strong></td>
+                <td><code>.devcontainer</code></td>
+                <td>n8n-io/n8n</td>
+            </tr>
+            
+            <tr>
+                <td><span class="badge badge-blue">ci-cd-quality</span></td>
+                <td><strong>GitHub Actions</strong></td>
+                <td><code>.github/workflows</code></td>
+                <td>n8n-io/n8n, google-gemini/gemini-cli, D4Vinci/Scrapling, koala73/worldmonitor</td>
+            </tr>
+            
+            <tr>
+                <td><span class="badge badge-blue">dependency-lock</span></td>
+                <td><strong>npm (package-lock.json)</strong></td>
+                <td><code>package-lock.json</code></td>
+                <td>google-gemini/gemini-cli, koala73/worldmonitor</td>
+            </tr>
+            
+            <tr>
+                <td><span class="badge badge-blue">container-runtime</span></td>
+                <td><strong>Docker (Dockerfile)</strong></td>
+                <td><code>Dockerfile</code></td>
+                <td>google-gemini/gemini-cli, D4Vinci/Scrapling, koala73/worldmonitor</td>
+            </tr>
+            
+            <tr>
+                <td><span class="badge badge-blue">ci-cd-quality</span></td>
+                <td><strong>Make (Makefile)</strong></td>
+                <td><code>Makefile</code></td>
+                <td>google-gemini/gemini-cli, koala73/worldmonitor</td>
+            </tr>
+            
+            <tr>
+                <td><span class="badge badge-blue">dependency-lock</span></td>
+                <td><strong>PEP 621 Python Packaging</strong></td>
+                <td><code>pyproject.toml ([project] PEP 621)</code></td>
+                <td>D4Vinci/Scrapling</td>
+            </tr>
+            
+            <tr>
+                <td><span class="badge badge-blue">ci-cd-quality</span></td>
+                <td><strong>pre-commit (.pre-commit-config.yaml)</strong></td>
+                <td><code>.pre-commit-config.yaml</code></td>
+                <td>D4Vinci/Scrapling</td>
+            </tr>
+            
+            <tr>
+                <td><span class="badge badge-blue">ci-cd-quality</span></td>
+                <td><strong>Ruff (ruff.toml)</strong></td>
+                <td><code>ruff.toml</code></td>
+                <td>D4Vinci/Scrapling</td>
+            </tr>
+            
+            <tr>
+                <td><span class="badge badge-blue">orchestration-deploy</span></td>
+                <td><strong>Docker Compose (docker-compose.yml)</strong></td>
+                <td><code>docker-compose.yml</code></td>
+                <td>koala73/worldmonitor</td>
+            </tr>
+            
+            <tr>
+                <td><span class="badge badge-blue">orchestration-deploy</span></td>
+                <td><strong>Vercel (vercel.json)</strong></td>
+                <td><code>vercel.json</code></td>
+                <td>koala73/worldmonitor</td>
+            </tr>
+            
+        </tbody>
+      </table>
+    </div>
+
+    <h2 class="section-title">Memory, State &amp; Agent Communication Advisor</h2>
+    <div class="card">
+      <div class="dim-header">
+        <span class="dim-title">Selected Memory Strategy</span>
+        <span class="badge badge-green">transactional-db (primary) + episodic-agent-state (secondary)</span>
+      </div>
+      <p><strong>Agent / Component Communication Pattern:</strong> Agents communicate with ClawBridge via JSON-RPC 2.0 (Model Context Protocol stdio/SSE) and REST with Bearer tokens; ClawBridge dispatches authenticated HTTP/2 requests to platform APIs.</p>
+      <p><strong>Workflow Memory Lifecycle:</strong> Credentials, OAuth tokens, and audit receipts are stored in an encrypted SQLite database using WAL mode; tokens are decrypted just-in-time for downstream dispatch; inbound events append to an indexed event log and push to connected agent SSE event queues.</p>
+      <p><strong>Why This Memory Architecture (vs. RAG / Vector DB / Alternatives):</strong> Transactional SQLite with WAL mode provides embedded zero-overhead ACID transactions, robust single-writer concurrent reads, and zero external infrastructure dependencies, superior to complex distributed databases for local/containerized agent bridges.</p>
+      <p class="rejected"><strong>Alternatives Considered:</strong> External HashiCorp Vault (rejected for MVP due to heavy operational setup overhead); Raw environment variables or plain JSON config files (rejected due to severe credential leakage risks and inability to support live automated token refresh).</p>
+      <h4 style="margin-top:0.85rem">Anticipated Memory Failure Modes &amp; Mitigations</h4>
+      <ul class='edge-list'><li>⚠️ Database locking contention (SQLITE_BUSY) under concurrent agent bursts, mitigated by enabling WAL mode, a 5000ms busy timeout, and a thread-safe connection pool.</li><li>⚠️ Token refresh race conditions where multiple parallel agent requests trigger simultaneous OAuth token refresh calls, mitigated by single-flight mutex locking per channel credentials.</li></ul>
+    </div>
+
+    <h2 class="section-title">Scouted Open-Source Building Blocks (GitHub Libraries &amp; SDKs)</h2>
+    <div class="card" style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Repository</th>
+            <th>Stars</th>
+            <th>License</th>
+            <th>Language</th>
+            <th>Last Push</th>
+            <th>Summary</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+            <tr>
+                <td><a href="https://github.com/modelcontextprotocol/servers" target="_blank" rel="noopener">modelcontextprotocol/servers</a></td>
+                <td>⭐ 91,630</td>
+                <td><code>Unspecified</code></td>
+                <td>TypeScript</td>
+                <td>0d ago</td>
+                <td>Model Context Protocol Servers</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/authelia/authelia" target="_blank" rel="noopener">authelia/authelia</a></td>
+                <td>⭐ 29,431</td>
+                <td><code>Apache-2.0</code></td>
+                <td>Go</td>
+                <td>0d ago</td>
+                <td>The Single Sign-On Multi-Factor portal for web apps. OpenID Certified™ and Post-Quantum Cryptography Ready.</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/modelcontextprotocol/python-sdk" target="_blank" rel="noopener">modelcontextprotocol/python-sdk</a></td>
+                <td>⭐ 24,695</td>
+                <td><code>MIT</code></td>
+                <td>Python</td>
+                <td>1d ago</td>
+                <td>The official Python SDK for Model Context Protocol servers and clients</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/OpenNHP/opennhp" target="_blank" rel="noopener">OpenNHP/opennhp</a></td>
+                <td>⭐ 13,949</td>
+                <td><code>Apache-2.0</code></td>
+                <td>Go</td>
+                <td>1d ago</td>
+                <td>Make your infrastructure invisible to attackers. OpenNHP implements the Network-infrastructure Hiding Protocol (NHP): authenticate before connection, cryptographically. IETF draft.</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/modelcontextprotocol/typescript-sdk" target="_blank" rel="noopener">modelcontextprotocol/typescript-sdk</a></td>
+                <td>⭐ 13,669</td>
+                <td><code>Unspecified</code></td>
+                <td>TypeScript</td>
+                <td>0d ago</td>
+                <td>The official TypeScript SDK for Model Context Protocol servers and clients</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/Cyan4973/xxHash" target="_blank" rel="noopener">Cyan4973/xxHash</a></td>
+                <td>⭐ 11,379</td>
+                <td><code>Unspecified</code></td>
+                <td>C</td>
+                <td>0d ago</td>
+                <td>Extremely fast non-cryptographic hash algorithm</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/modelcontextprotocol/inspector" target="_blank" rel="noopener">modelcontextprotocol/inspector</a></td>
+                <td>⭐ 11,175</td>
+                <td><code>Unspecified</code></td>
+                <td>TypeScript</td>
+                <td>3d ago</td>
+                <td>Visual testing tool for MCP servers</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/krzyzanowskim/CryptoSwift" target="_blank" rel="noopener">krzyzanowskim/CryptoSwift</a></td>
+                <td>⭐ 10,578</td>
+                <td><code>Unspecified</code></td>
+                <td>Swift</td>
+                <td>69d ago</td>
+                <td>CryptoSwift is a growing collection of standard and secure cryptographic algorithms implemented in Swift</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/modelcontextprotocol/modelcontextprotocol" target="_blank" rel="noopener">modelcontextprotocol/modelcontextprotocol</a></td>
+                <td>⭐ 9,551</td>
+                <td><code>Unspecified</code></td>
+                <td>TypeScript</td>
+                <td>0d ago</td>
+                <td>Specification and documentation for the Model Context Protocol</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/authlib/authlib" target="_blank" rel="noopener">authlib/authlib</a></td>
+                <td>⭐ 5,442</td>
+                <td><code>BSD-3-Clause</code></td>
+                <td>Python</td>
+                <td>2d ago</td>
+                <td>The ultimate Python library in building OAuth, OpenID Connect clients and servers. JWS, JWE, JWK, JWA, JWT included.</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/yushijinhun/authlib-injector" target="_blank" rel="noopener">yushijinhun/authlib-injector</a></td>
+                <td>⭐ 951</td>
+                <td><code>Unspecified</code></td>
+                <td>Java</td>
+                <td>26d ago</td>
+                <td>Build your own Minecraft authentication system.</td>
+            </tr>
+            
+            <tr>
+                <td><a href="https://github.com/authlib/example-oauth2-server" target="_blank" rel="noopener">authlib/example-oauth2-server</a></td>
+                <td>⭐ 704</td>
+                <td><code>Unspecified</code></td>
+                <td>Python</td>
+                <td>327d ago</td>
+                <td>Example for OAuth 2 Server for Authlib.</td>
+            </tr>
+            
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- TAB 4: SYSTEM DESIGN & MERMAID -->
+  <section id="tab-design" class="tab-panel">
+    <h2 class="section-title">System Topology Diagram</h2>
+    <div class="mermaid-box">
+      <pre class="mermaid">flowchart TD
+    subgraph Agents[&quot;Autonomous Agents&quot;]
+        Nemo[NemoClaw]
+        OpenClaw[OpenClaw]
+        Muse[Muse]
+        OtherAgents[Other Agents]
+    end
+
+    subgraph ClawBridge[&quot;ClawBridge Core Gateway&quot;]
+        MCPAdapter[&quot;MCP Server &amp; REST Gateway\n(FastMCP / stdio + SSE)&quot;]
+        AuthZ[&quot;Agent Identity &amp; ACL Checker\n(Bearer Token Auth)&quot;]
+        Vault[&quot;Encrypted Vault &amp; Token Manager\n(SQLite WAL + AES-256-GCM)&quot;]
+        RateLimiter[&quot;Token-Bucket Rate Limiter\n(Egress Throttle &amp; Backoff)&quot;]
+        Dispatcher[&quot;Egress Dispatcher\n(HTTP/2 Client + Auth Headers)&quot;]
+        WebhookIngest[&quot;Inbound Webhook Normalizer\n(HMAC Verification &amp; Dedup)&quot;]
+        EventStream[&quot;Agent Event Queue\n(SSE Real-Time Push)&quot;]
+    end
+
+    subgraph Downstream[&quot;Outbound Channels &amp; External Services&quot;]
+        Social[&quot;Social Platforms\n(X/Twitter, LinkedIn, Discord, Telegram)&quot;]
+        Enterprise[&quot;Enterprise &amp; Productivity\n(Slack, Jira, GitHub, Notion)&quot;]
+    end
+
+    Nemo --&gt;|MCP Tool Calls| MCPAdapter
+    OpenClaw --&gt;|MCP Tool Calls| MCPAdapter
+    Muse --&gt;|MCP Tool Calls| MCPAdapter
+    OtherAgents --&gt;|MCP Tool Calls| MCPAdapter
+
+    MCPAdapter --&gt; AuthZ
+    AuthZ --&gt; RateLimiter
+    RateLimiter --&gt; Dispatcher
+    Vault &lt;--&gt;|JIT Decryption &amp; Auto Refresh| Dispatcher
+
+    Dispatcher --&gt;|Authenticated Egress API| Social
+    Dispatcher --&gt;|Authenticated Egress API| Enterprise
+
+    Social -.-&gt;|Inbound Webhooks| WebhookIngest
+    Enterprise -.-&gt;|Inbound Webhooks| WebhookIngest
+
+    WebhookIngest --&gt; Vault
+    WebhookIngest --&gt; EventStream
+    EventStream -.-&gt;|SSE Events| Agents</pre>
+      <details class="raw-mermaid">
+        <summary>View raw Mermaid source (Note: visual diagram rendering requires internet access for Mermaid CDN)</summary>
+        <pre>flowchart TD
+    subgraph Agents[&quot;Autonomous Agents&quot;]
+        Nemo[NemoClaw]
+        OpenClaw[OpenClaw]
+        Muse[Muse]
+        OtherAgents[Other Agents]
+    end
+
+    subgraph ClawBridge[&quot;ClawBridge Core Gateway&quot;]
+        MCPAdapter[&quot;MCP Server &amp; REST Gateway\n(FastMCP / stdio + SSE)&quot;]
+        AuthZ[&quot;Agent Identity &amp; ACL Checker\n(Bearer Token Auth)&quot;]
+        Vault[&quot;Encrypted Vault &amp; Token Manager\n(SQLite WAL + AES-256-GCM)&quot;]
+        RateLimiter[&quot;Token-Bucket Rate Limiter\n(Egress Throttle &amp; Backoff)&quot;]
+        Dispatcher[&quot;Egress Dispatcher\n(HTTP/2 Client + Auth Headers)&quot;]
+        WebhookIngest[&quot;Inbound Webhook Normalizer\n(HMAC Verification &amp; Dedup)&quot;]
+        EventStream[&quot;Agent Event Queue\n(SSE Real-Time Push)&quot;]
+    end
+
+    subgraph Downstream[&quot;Outbound Channels &amp; External Services&quot;]
+        Social[&quot;Social Platforms\n(X/Twitter, LinkedIn, Discord, Telegram)&quot;]
+        Enterprise[&quot;Enterprise &amp; Productivity\n(Slack, Jira, GitHub, Notion)&quot;]
+    end
+
+    Nemo --&gt;|MCP Tool Calls| MCPAdapter
+    OpenClaw --&gt;|MCP Tool Calls| MCPAdapter
+    Muse --&gt;|MCP Tool Calls| MCPAdapter
+    OtherAgents --&gt;|MCP Tool Calls| MCPAdapter
+
+    MCPAdapter --&gt; AuthZ
+    AuthZ --&gt; RateLimiter
+    RateLimiter --&gt; Dispatcher
+    Vault &lt;--&gt;|JIT Decryption &amp; Auto Refresh| Dispatcher
+
+    Dispatcher --&gt;|Authenticated Egress API| Social
+    Dispatcher --&gt;|Authenticated Egress API| Enterprise
+
+    Social -.-&gt;|Inbound Webhooks| WebhookIngest
+    Enterprise -.-&gt;|Inbound Webhooks| WebhookIngest
+
+    WebhookIngest --&gt; Vault
+    WebhookIngest --&gt; EventStream
+    EventStream -.-&gt;|SSE Events| Agents</pre>
+      </details>
+    </div>
+
+    <h2 class="section-title">Core Request Lifecycle (Sequence Diagram)</h2>
+    <div class="mermaid-box">
+      <pre class="mermaid">sequenceDiagram
+    autonumber
+    participant Agent as Autonomous Agent (e.g. NemoClaw)
+    participant Gateway as ClawBridge MCP Gateway
+    participant Vault as Encrypted Vault (SQLite WAL)
+    participant API as External Platform (e.g. Slack / Jira)
+
+    Note over Agent,Gateway: Outbound Tool Invocation Flow
+    Agent-&gt;&gt;Gateway: tools/call (slack_post_message, args, agent_token)
+    Gateway-&gt;&gt;Gateway: Validate Agent Identity &amp; ACL Policy
+    Gateway-&gt;&gt;Gateway: Check Channel Rate Limiter
+    Gateway-&gt;&gt;Vault: Fetch Channel OAuth Token (JIT Decrypt)
+    alt Token Expired?
+        Vault-&gt;&gt;API: Single-Flight OAuth Refresh Request
+        API--&gt;&gt;Vault: Return Fresh Access Token
+        Vault-&gt;&gt;Vault: Store Re-Encrypted Token
+    end
+    Gateway-&gt;&gt;API: POST /api/chat.postMessage (Bearer Token)
+    alt Downstream Success
+        API--&gt;&gt;Gateway: HTTP 200 {ok: true, ts: &quot;...&quot;}
+        Gateway--&gt;&gt;Agent: tool_result {status: &quot;success&quot;, receipt: {...}}
+    else Downstream Rate Limited (429)
+        API--&gt;&gt;Gateway: HTTP 429 Too Many Requests (Retry-After: 10)
+        Gateway--&gt;&gt;Agent: tool_result {status: &quot;error&quot;, code: &quot;RATE_LIMITED&quot;, retry_after_s: 10}
+    end
+
+    Note over Gateway,Agent: Inbound Webhook Event Flow
+    API--&gt;&gt;Gateway: Inbound Webhook (HMAC Header, Payload)
+    Gateway-&gt;&gt;Gateway: Verify HMAC Signature &amp; Freshness (&lt;300s)
+    Gateway-&gt;&gt;Vault: Deduplicate Delivery ID
+    Gateway--&gt;&gt;Agent: Push Event via SSE topic (channel_mention)</pre>
+      <details class="raw-mermaid">
+        <summary>View raw Mermaid source (Note: visual diagram rendering requires internet access for Mermaid CDN)</summary>
+        <pre>sequenceDiagram
+    autonumber
+    participant Agent as Autonomous Agent (e.g. NemoClaw)
+    participant Gateway as ClawBridge MCP Gateway
+    participant Vault as Encrypted Vault (SQLite WAL)
+    participant API as External Platform (e.g. Slack / Jira)
+
+    Note over Agent,Gateway: Outbound Tool Invocation Flow
+    Agent-&gt;&gt;Gateway: tools/call (slack_post_message, args, agent_token)
+    Gateway-&gt;&gt;Gateway: Validate Agent Identity &amp; ACL Policy
+    Gateway-&gt;&gt;Gateway: Check Channel Rate Limiter
+    Gateway-&gt;&gt;Vault: Fetch Channel OAuth Token (JIT Decrypt)
+    alt Token Expired?
+        Vault-&gt;&gt;API: Single-Flight OAuth Refresh Request
+        API--&gt;&gt;Vault: Return Fresh Access Token
+        Vault-&gt;&gt;Vault: Store Re-Encrypted Token
+    end
+    Gateway-&gt;&gt;API: POST /api/chat.postMessage (Bearer Token)
+    alt Downstream Success
+        API--&gt;&gt;Gateway: HTTP 200 {ok: true, ts: &quot;...&quot;}
+        Gateway--&gt;&gt;Agent: tool_result {status: &quot;success&quot;, receipt: {...}}
+    else Downstream Rate Limited (429)
+        API--&gt;&gt;Gateway: HTTP 429 Too Many Requests (Retry-After: 10)
+        Gateway--&gt;&gt;Agent: tool_result {status: &quot;error&quot;, code: &quot;RATE_LIMITED&quot;, retry_after_s: 10}
+    end
+
+    Note over Gateway,Agent: Inbound Webhook Event Flow
+    API--&gt;&gt;Gateway: Inbound Webhook (HMAC Header, Payload)
+    Gateway-&gt;&gt;Gateway: Verify HMAC Signature &amp; Freshness (&lt;300s)
+    Gateway-&gt;&gt;Vault: Deduplicate Delivery ID
+    Gateway--&gt;&gt;Agent: Push Event via SSE topic (channel_mention)</pre>
+      </details>
+    </div>
+
+    <h2 class="section-title">Architecture Trade-Off Matrix</h2>
+    <div class="card" style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Option</th>
+            <th>Pros</th>
+            <th>Cons</th>
+            <th>Verdict</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+            <tr>
+                <td><strong>Zero-Trust MCP Execution Proxy</strong></td>
+                <td>Raw secrets never touch LLM context, unified tool schema</td>
+                <td>Gateway becomes single point of failure</td>
+                <td>Selected (ADR-0001)</td>
+            </tr>
+            
+            <tr>
+                <td><strong>Direct Credential Distribution</strong></td>
+                <td>Simple implementation, agents make direct HTTP calls</td>
+                <td>Massive security risk, token leakage in prompts, fragmented refresh logic</td>
+                <td>Rejected</td>
+            </tr>
+            
+            <tr>
+                <td><strong>Embedded SQLite WAL with AES-GCM</strong></td>
+                <td>Zero external infrastructure dependencies, fast local ACID transactions</td>
+                <td>Requires manual replication if clustering across multiple machines</td>
+                <td>Selected (ADR-0002)</td>
+            </tr>
+            
+            <tr>
+                <td><strong>External HashiCorp Vault</strong></td>
+                <td>Enterprise HA and centralized key management</td>
+                <td>Heavy operational overhead and high barrier for local agent development</td>
+                <td>Rejected</td>
+            </tr>
+            
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- TAB 5: DECISION LEDGER & IMPLEMENTATION PLAN -->
+  <section id="tab-ledger" class="tab-panel">
+    <h2 class="section-title">Decision Ledger (Locked ADRs &amp; Rejected Paths)</h2>
+    
+                <div class="card adr-card">
+                    <div class="adr-header">
+                        <span class="badge badge-blue">ADR-0001</span>
+                        <h4>Zero-Trust Agent Egress Proxy</h4>
+                        <span class="muted">docs/adr/0001-zero-trust-agent-egress-proxy.md</span>
+                    </div>
+                    <p><strong>Locked Decision:</strong> Agents authenticate to ClawBridge with an Agent Bearer Token; ClawBridge retrieves platform credentials from the internal vault, attaches authentication headers, and dispatches requests. Raw platform secrets and tokens are never exposed to agents or LLM contexts.</p>
+                    <p><strong>Rationale:</strong> Direct token distribution leaves credentials vulnerable to prompt injection exfiltration, context log leaking, and decentralized token management.</p>
+                    <p class='rejected'><strong>Rejected Alternatives:</strong> Direct secret distribution to agents (where agents fetch tokens from ClawBridge and make direct API calls to Slack/Jira/X).</p>
+                </div>
+                
+                <div class="card adr-card">
+                    <div class="adr-header">
+                        <span class="badge badge-blue">ADR-0002</span>
+                        <h4>Embedded Encrypted SQLite WAL Vault</h4>
+                        <span class="muted">docs/adr/0002-embedded-encrypted-sqlite-wal-vault.md</span>
+                    </div>
+                    <p><strong>Locked Decision:</strong> Store platform credentials, OAuth tokens, and audit logs in a local SQLite database in WAL mode encrypted with AES-256-GCM via a master key, utilizing Authlib for automated background refresh cycles.</p>
+                    <p><strong>Rationale:</strong> Zero external infrastructure dependencies for developers while preventing token leakage and enabling seamless background OAuth rotation.</p>
+                    <p class='rejected'><strong>Rejected Alternatives:</strong> External secret management daemons (HashiCorp Vault, AWS Secrets Manager) or plaintext environment variables.</p>
+                </div>
+                
+                <div class="card adr-card">
+                    <div class="adr-header">
+                        <span class="badge badge-blue">ADR-0003</span>
+                        <h4>Bi-Directional Egress MCP &amp; Inbound SSE Stream</h4>
+                        <span class="muted">docs/adr/0003-bi-directional-egress-mcp-inbound-sse-stream.md</span>
+                    </div>
+                    <p><strong>Locked Decision:</strong> Implement dual-mode communication: outbound tool calling over Model Context Protocol (stdio / SSE) and inbound webhook normalization streaming into agent-subscribed SSE topics with cryptographic HMAC signature verification.</p>
+                    <p><strong>Rationale:</strong> Modern autonomous agents (NemoClaw, Muse, OpenClaw) require event-driven reactive wakeups (e.g. Slack mentions, Jira issue updates) alongside proactive tool execution.</p>
+                    <p class='rejected'><strong>Rejected Alternatives:</strong> Outbound-only gateway or raw unverified webhook proxies.</p>
+                </div>
+                
+                <div class="card adr-card">
+                    <div class="adr-header">
+                        <span class="badge badge-blue">ADR-0004</span>
+                        <h4>Per-Channel Token-Bucket Rate Limiting &amp; Normalized Errors</h4>
+                        <span class="muted">docs/adr/0004-per-channel-token-bucket-rate-limiting-normalized-errors.md</span>
+                    </div>
+                    <p><strong>Locked Decision:</strong> Implement an internal per-channel token bucket rate limiter and transform downstream API errors into structured, machine-readable JSON receipts with retry-after metadata.</p>
+                    <p><strong>Rationale:</strong> Prevents agent execution crashes (addressing n8n-io/n8n#24042) and avoids triggering severe downstream API bans.</p>
+                    <p class='rejected'><strong>Rejected Alternatives:</strong> Pass-through raw HTTP errors or unhandled socket exceptions.</p>
+                </div>
+                
+
+    <h2 class="section-title">Implementation Plan</h2>
+    <div class="card">
+      <ol class='step-list'><li>Step 1: Core Encrypted SQLite Vault &amp; Credentials Model :: Schema, AES-256-GCM envelope encryption, Authlib OAuth token model, and migrations ::</li><li>Step 2: Agent Identity &amp; Scoped Access Control Layer :: Agent token generation, authentication middleware, and per-tool granular ACL enforcement :: Step 1</li><li>Step 3: Outbound Egress Dispatcher &amp; Token-Bucket Rate Limiter :: HTTP/2 client with JIT token attachment, exponential backoff, and error normalizer :: Step 2</li><li>Step 4: FastMCP Server &amp; Tool Definitions :: Model Context Protocol server exposing Slack, Jira, Twitter/X, and Discord tool actions :: Step 3</li><li>Step 5: Inbound Webhook Receiver &amp; SSE Event Stream :: HMAC signature validation, delivery deduplication, and agent-subscribed SSE event topics :: Step 4</li><li>Step 6: End-to-End Verification &amp; Multi-Agent Test Harness :: Automated integration test suite validating NemoClaw/OpenClaw simulation calls :: Step 5</li></ol>
+    </div>
+  </section>
+</div>
+
+<script>
+  const SPEC_MARKDOWN = "# System Design Specification: ClawBridge\n\n- **Readiness Score:** 100% (Evidence-Verified)\n- **Target Runtime:** Python 3.11+ / TypeScript\n- **Tech Stack:** FastAPI, SQLite WAL / PostgreSQL, AES-GCM / Vault, Redis, Model Context Protocol (MCP)\n\n## 1. Executive Summary\n\nUnified agent connector gateway and secure credential vault bridging autonomous agents to social apps and outbound workplace channels\n\n## 2. Architectural Dimensions & Stress-Tested Edge Cases\n\n### Problem & User Pain (`problem` \u2014 20/20)\nAutonomous agents lack a unified, secure egress and ingress bridge, causing fragmented credentials management, leaked OAuth tokens, and fragile custom integrations across social platforms and enterprise services.\n\n**Stress-Tested Edge Cases:**\n- Agent compromises or prompt injections attempting to extract raw third-party access tokens or OAuth refresh credentials directly via tool calls.\n- Downstream platform API schema drift or sudden credential expiration during an active multi-step autonomous agent workflow.\n\n### Scope & Non-Goals (`scope` \u2014 20/20)\nDeliver a unified bidirectional bridge supporting outbound egress tool invocation across social and enterprise APIs, secure credential vaulting, and inbound webhook event normalization into agent SSE streams; non-goals include LLM orchestration, model hosting, or general ETL data pipelines.\n\n**Stress-Tested Edge Cases:**\n- High-frequency inbound webhook bursts (e.g. Slack mentions flood or GitHub push storms) overwhelming agent SSE listeners.\n- Agent attempting destructive administrative actions outside its assigned scoped permission policy.\n\n### State, Memory & Agent Communication (`memory` \u2014 20/20)\nZero-overhead encrypted SQLite WAL database managing per-agent credentials, scoped permissions, and event logs with just-in-time AES-256-GCM token decryption and single-flight token rotation.\n\n**Stress-Tested Edge Cases:**\n- Multiple concurrent agent threads attempting to read/write credentials during an active OAuth token expiration window.\n- Master encryption key rotation requiring re-encryption of all stored channel secrets without downtime.\n\n### Bottlenecks & Failure Modes (`bottlenecks` \u2014 20/20)\nDownstream platform API rate limiting (HTTP 429s), token expiration cascades, network latency jitter, and unhandled tool error propagation are prevented via token-bucket throttlers and normalized JSON error structures.\n\n**Stress-Tested Edge Cases:**\n- Sudden burst of 50+ concurrent agent tool dispatches hitting Twitter/X API tier limits, requiring queuing with exponential jitter backoff.\n- Downstream service outage (e.g. Slack API degradation returning 503) intercepted and formatted as recoverable retryable errors rather than unhandled socket crashes.\n\n### Prior-Art Differentiation (`differentiation` \u2014 20/20)\nUnlike general workflow automation platforms like n8n-io/n8n or monolithic CLI tools like google-gemini/gemini-cli, ClawBridge is a dedicated zero-trust egress and ingress gateway leveraging modelcontextprotocol/servers to isolate raw credentials from agents while providing robust error recovery and rate-limiting.\n\n**Stress-Tested Edge Cases:**\n- Agent requesting batch operations across multiple platforms (e.g. cross-posting an announcement to Twitter, Slack, and LinkedIn simultaneously) with partial failure isolation.\n- Migration of existing agent integrations from raw platform REST clients to ClawBridge's normalized MCP tool schema without breaking agent prompts.\n\n### Memory, State & Agent Communication Workflow\n\n- **Primary Memory Strategy:** `transactional-db`\n- **Secondary / Combined Strategies:** `episodic-agent-state`\n- **Combined Memory Profile:** `transactional-db (primary) + episodic-agent-state (secondary)`\n- **Agent / Component Communication Pattern:** Agents communicate with ClawBridge via JSON-RPC 2.0 (Model Context Protocol stdio/SSE) and REST with Bearer tokens; ClawBridge dispatches authenticated HTTP/2 requests to platform APIs.\n- **Workflow Memory Lifecycle:** Credentials, OAuth tokens, and audit receipts are stored in an encrypted SQLite database using WAL mode; tokens are decrypted just-in-time for downstream dispatch; inbound events append to an indexed event log and push to connected agent SSE event queues.\n- **Why This Strategy (vs. RAG / Vector DB / Alternatives):** Transactional SQLite with WAL mode provides embedded zero-overhead ACID transactions, robust single-writer concurrent reads, and zero external infrastructure dependencies, superior to complex distributed databases for local/containerized agent bridges.\n- **Alternatives Considered:** External HashiCorp Vault (rejected for MVP due to heavy operational setup overhead); Raw environment variables or plain JSON config files (rejected due to severe credential leakage risks and inability to support live automated token refresh).\n\n**Memory Failure Modes & Mitigations:**\n\n- \u26a0\ufe0f Database locking contention (SQLITE_BUSY) under concurrent agent bursts, mitigated by enabling WAL mode, a 5000ms busy timeout, and a thread-safe connection pool.\n- \u26a0\ufe0f Token refresh race conditions where multiple parallel agent requests trigger simultaneous OAuth token refresh calls, mitigated by single-flight mutex locking per channel credentials.\n\n## 3. Stack Explained (Tooling, Alternatives, Now vs. Later & Proof Status)\n\n| Tool | Stage (`Now` / `Later`) | What Job It Does | Why Needed | Alternative Considered | Config Proof & Verification |\n| :--- | :---: | :--- | :--- | :--- | :--- |\n| **FastMCP / Model Context Protocol Python SDK** (`core-oss`) | **NOW** | Exposes standardized MCP tool schemas (stdio and SSE) for autonomous agents to discover and invoke downstream actions without custom API wrappers. | Standardizes agent integration across diverse platforms (NemoClaw, OpenClaw, Muse, Gemini) with zero custom protocol glue. | Custom REST/GraphQL APIs (rejected because every agent would require custom client tool definitions rather than native MCP compatibility). | \u26a0\ufe0f Claimed / Unverified: `pyproject.toml ([project] PEP 621)` |\n| **SQLite (WAL mode) with Cryptography (AES-256-GCM)** (`storage-memory`) | **NOW** | Zero-overhead local encrypted store for per-agent credentials, platform OAuth tokens, audit logs, and inbound webhook event queues. | Ensures zero external infrastructure dependencies for local developers while securing tokens at rest with AES-GCM envelope encryption. | HashiCorp Vault or AWS Secrets Manager (rejected for MVP due to external operational overhead and cloud lock-in). | \u26a0\ufe0f Claimed / Unverified: `pyproject.toml ([project] PEP 621)` |\n| **Authlib** (`core-oss`) | **NOW** | Manages OAuth 1.0a and OAuth 2.0 token refreshes, PKCE authorization flows, and JWT validation for third-party platforms. | Handles tricky multi-provider OAuth refresh lifecycles automatically to avoid mid-session 401 expiration failures. | Custom OAuth refresh loops (rejected as error-prone across differing provider specs like Twitter vs Slack vs Jira). | \u26a0\ufe0f Claimed / Unverified: `pyproject.toml ([project] PEP 621)` |\n| **Docker (Dockerfile)** (`container-runtime`) | **NOW** | Containerizes the ClawBridge server and SQLite database for portable local daemon or cloud deployment. | Enables one-command spun up service accessible over stdio or Docker bridge network for multi-agent clusters. | Bare-metal process running on host OS (rejected due to Python environment conflicts and permission isolation). | \u2705 Verified (`scout:Dockerfile`): `Dockerfile` |\n\n### Config Files Verified in Scouted Incumbent Repos\n\n| Category | Tool Proven | Config File Inspected | Observed In Repos |\n| :--- | :--- | :--- | :--- |\n| `dependency-lock` | **pnpm (pnpm-lock.yaml)** | `pnpm-lock.yaml` | `n8n-io/n8n` |\n| `container-runtime` | **Dev Containers (.devcontainer)** | `.devcontainer` | `n8n-io/n8n` |\n| `ci-cd-quality` | **GitHub Actions** | `.github/workflows` | `n8n-io/n8n`, `google-gemini/gemini-cli`, `D4Vinci/Scrapling`, `koala73/worldmonitor` |\n| `dependency-lock` | **npm (package-lock.json)** | `package-lock.json` | `google-gemini/gemini-cli`, `koala73/worldmonitor` |\n| `container-runtime` | **Docker (Dockerfile)** | `Dockerfile` | `google-gemini/gemini-cli`, `D4Vinci/Scrapling`, `koala73/worldmonitor` |\n| `ci-cd-quality` | **Make (Makefile)** | `Makefile` | `google-gemini/gemini-cli`, `koala73/worldmonitor` |\n| `dependency-lock` | **PEP 621 Python Packaging** | `pyproject.toml ([project] PEP 621)` | `D4Vinci/Scrapling` |\n| `ci-cd-quality` | **pre-commit (.pre-commit-config.yaml)** | `.pre-commit-config.yaml` | `D4Vinci/Scrapling` |\n| `ci-cd-quality` | **Ruff (ruff.toml)** | `ruff.toml` | `D4Vinci/Scrapling` |\n| `orchestration-deploy` | **Docker Compose (docker-compose.yml)** | `docker-compose.yml` | `koala73/worldmonitor` |\n| `orchestration-deploy` | **Vercel (vercel.json)** | `vercel.json` | `koala73/worldmonitor` |\n\n### Scouted Open-Source Building Blocks (GitHub)\n\n| Repository | Stars | License | Language | Last Push | Description |\n| :--- | :---: | :---: | :---: | :---: | :--- |\n| [modelcontextprotocol/servers](https://github.com/modelcontextprotocol/servers) | \u2b50 91630 | `Unspecified` | TypeScript | 0d ago | Model Context Protocol Servers |\n| [authelia/authelia](https://github.com/authelia/authelia) | \u2b50 29431 | `Apache-2.0` | Go | 0d ago | The Single Sign-On Multi-Factor portal for web apps. OpenID Certified\u2122 and Post-Quantum Cryptography Ready. |\n| [modelcontextprotocol/python-sdk](https://github.com/modelcontextprotocol/python-sdk) | \u2b50 24695 | `MIT` | Python | 1d ago | The official Python SDK for Model Context Protocol servers and clients |\n| [OpenNHP/opennhp](https://github.com/OpenNHP/opennhp) | \u2b50 13949 | `Apache-2.0` | Go | 1d ago | Make your infrastructure invisible to attackers. OpenNHP implements the Network-infrastructure Hiding Protocol (NHP): authenticate before connection, cryptographically. IETF draft. |\n| [modelcontextprotocol/typescript-sdk](https://github.com/modelcontextprotocol/typescript-sdk) | \u2b50 13669 | `Unspecified` | TypeScript | 0d ago | The official TypeScript SDK for Model Context Protocol servers and clients |\n| [Cyan4973/xxHash](https://github.com/Cyan4973/xxHash) | \u2b50 11379 | `Unspecified` | C | 0d ago | Extremely fast non-cryptographic hash algorithm |\n| [modelcontextprotocol/inspector](https://github.com/modelcontextprotocol/inspector) | \u2b50 11175 | `Unspecified` | TypeScript | 3d ago | Visual testing tool for MCP servers |\n| [krzyzanowskim/CryptoSwift](https://github.com/krzyzanowskim/CryptoSwift) | \u2b50 10578 | `Unspecified` | Swift | 69d ago | CryptoSwift is a growing collection of standard and secure cryptographic algorithms implemented in Swift |\n\n## 4. Adversarial Red-Team Critiques & Mitigations\n\n### [CRITICAL] OAuth Token Refresh Stampede\n- **Failure Mode / Attack Vector:** When multiple agents simultaneously dispatch requests through an expired OAuth token, concurrent refresh requests hit the identity provider (e.g. Slack/X), invalidating the refresh token and locking out all agents.\n- **Architectural Mitigation:** Implement single-flight distributed mutex per credential ID in memory so only one refresh call executes while others await the updated access token.\n\n### [HIGH] Inbound Webhook Replay & Spoofing\n- **Failure Mode / Attack Vector:** An adversary intercepts a valid webhook from Jira or Slack and replays it repeatedly, triggering costly automated agent loops or unauthorized state changes.\n- **Architectural Mitigation:** Enforce platform HMAC-SHA256 signature verification, a strict 300-second timestamp freshness window, and SQLite-backed deduplication on webhook delivery IDs.\n\n### [HIGH] Agent Privilege Escalation via Unscoped Tool Dispatch\n- **Failure Mode / Attack Vector:** A lightweight agent (e.g. read-only social monitor) invokes destructive tools (e.g. Jira issue deletion or Slack workspace admin endpoints) using the shared bridge.\n- **Architectural Mitigation:** Enforce per-agent Access Control Lists (ACLs) mapped to Agent Identity tokens, rejecting unauthorized tool calls before platform dispatch.\n\n## 5. GitHub Prior-Art & Mined Pain Points\n\n| Repository | Stars | Velocity | Last Push | Status | Summary |\n| :--- | :---: | :---: | :---: | :--- | :--- |\n| [n8n-io/n8n](https://github.com/n8n-io/n8n) | \u2b50 208851 | 2333.53/mo | 0d ago | Active Incumbent | Fair-code workflow automation platform with native AI capabilities. Combine visual building with custom code, self-host or cloud, 400+ integrations. |\n| [google-gemini/gemini-cli](https://github.com/google-gemini/gemini-cli) | \u2b50 108592 | 5838.28/mo | 0d ago | Active Incumbent | An open-source AI agent that brings the power of Gemini directly into your terminal. |\n| [D4Vinci/Scrapling](https://github.com/D4Vinci/Scrapling) | \u2b50 90131 | 3634.31/mo | 0d ago | Active Incumbent | \ud83d\udd77\ufe0f The BEST Web Scraping framework that handles everything from a single request to a full-scale crawl! Don't be shy, join here: https://discord.gg/EMgGbDceNQ and follow here for daily tips and tricks: https://x.com/Scrapling_dev |\n| [koala73/worldmonitor](https://github.com/koala73/worldmonitor) | \u2b50 89702 | 9215.96/mo | 0d ago | Active Incumbent | Real-time global intelligence dashboard. AI-powered news aggregation, geopolitical monitoring, and infrastructure tracking in a unified situational awareness interface |\n| [ruvnet/ruflo](https://github.com/ruvnet/ruflo) | \u2b50 79868 | 4679.77/mo | 0d ago | Active Incumbent | \ud83c\udf0a The original agent harness. Deploy intelligent multi-player swarms, coordinate autonomous workflows, and build conversational AI systems. Features adaptive memory, self-learning intelligence, federation, vector RAG integration, and native Claude Code / Codex / Hermes and many more Integrated |\n| [upstash/context7](https://github.com/upstash/context7) | \u2b50 63818 | 3300.93/mo | 0d ago | Active Incumbent | Context7 Platform -- Up-to-date docs for AI agents |\n| [sansan0/TrendRadar](https://github.com/sansan0/TrendRadar) | \u2b50 63254 | 3469.14/mo | 7d ago | Active Incumbent | \u2b50AI-driven public opinion & trend monitor with multi-platform aggregation, RSS, and smart alerts.\ud83c\udfaf \u544a\u522b\u4fe1\u606f\u8fc7\u8f7d\uff0c\u4f60\u7684 AI \u8206\u60c5\u76d1\u63a7\u52a9\u624b\u4e0e\u70ed\u70b9\u7b5b\u9009\u5de5\u5177\uff01\u805a\u5408\u591a\u5e73\u53f0\u70ed\u70b9 +  RSS \u8ba2\u9605\uff0c\u652f\u6301\u5173\u952e\u8bcd\u7cbe\u51c6\u7b5b\u9009\u3002AI \u667a\u80fd\u7b5b\u9009\u65b0\u95fb + AI \u7ffb\u8bd1 +  AI \u5206\u6790\u7b80\u62a5\u76f4\u63a8\u624b\u673a\uff0c\u4e5f\u652f\u6301\u63a5\u5165 MCP \u67b6\u6784\uff0c\u8d4b\u80fd AI \u81ea\u7136\u8bed\u8a00\u5bf9\u8bdd\u5206\u6790\u3001\u60c5\u611f\u6d1e\u5bdf\u4e0e\u8d8b\u52bf\u9884\u6d4b\u7b49\u3002\u652f\u6301 Docker \uff0c\u6570\u636e\u672c\u5730/\u4e91\u7aef\u81ea\u6301\u3002\u96c6\u6210\u5fae\u4fe1/\u98de\u4e66/\u9489\u9489/Telegram/\u90ae\u4ef6/ntfy/bark/slack \u7b49\u6e20\u9053\u667a\u80fd\u63a8\u9001\u3002 |\n| [ChromeDevTools/chrome-devtools-mcp](https://github.com/ChromeDevTools/chrome-devtools-mcp) | \u2b50 54337 | 3956.58/mo | 0d ago | Active Incumbent | Chrome DevTools for coding agents |\n\n### Verified User Pain Points from Open Issues\n\n- **[BUG/FAILURE] [google-gemini/gemini-cli#28625](https://github.com/google-gemini/gemini-cli/issues/28625) \u2014 Enterprise Gemini CLI users were promised access to the latest models \u2014 so where are Gemini 3.5 Flash and 3.6 Flash?** (\ud83d\udc4d 58 | \ud83d\udcac 3)\n  > During the Gemini CLI migration announcement on May 19, 2026, Google explicitly stated: > \u201cIf your organization uses Gemini CLI or our IDE extensions via a Gemini Code Assist Standard or Enterprise license, your access remains unchanged. We\u2019ll continue to support Gemini CLI and G...\n  > \ud83d\udcac **@Zhu-Aemon** (\ud83d\udc4d 0): Gemini 3.7 Flash is out and we still can't even access Gemini 3.1 Pro. This project is a huge spam.\n  > \ud83d\udcac **@Gerry9000** (\ud83d\udc4d 0): A data point that may narrow this: the gap is not confined to Code Assist licensing. We hit the identical behaviour on plain `gemini-api-key` auth \u2014 no Code Assist Standard or Enterprise involved. `gemini-3.6-flash`, `gemini-3.7-flash` and ...\n- **[BUG/FAILURE] [google-gemini/gemini-cli#13852](https://github.com/google-gemini/gemini-cli/issues/13852) \u2014 `GEMINI.md` instructions are ignored** (\ud83d\udc4d 16 | \ud83d\udcac 15)\n  > ### What happened? Gemini-3-pro fails to adhere to instructions in `GEMINI.md`. In the linked session the gemini file instructs the model not to create python scripts but to invoke them directly on the command line instead. This is ignored and the model tries to write a file. Whe...\n  > \ud83d\udcac **@zebra2023** (\ud83d\udc4d 5): The Gemini model tend to ignore rules; also, using copilot with the Gemini model, it ignores some rules or just says I followed them and it did not.\n  > \ud83d\udcac **@tavasti** (\ud83d\udc4d 1): I am also experiencing this issue. I have in my GEMINI.md disallowed making any changes before confirming plan is ok, have disallowed making extra refactoring without permission (to make git diffs readable and showing actual change), disall...\n- **[TOP-VOTED] [google-gemini/gemini-cli#19532](https://github.com/google-gemini/gemini-cli/issues/19532) \u2014 Add gemini-3.1-pro-preview** (\ud83d\udc4d 110 | \ud83d\udcac 127)\n  > ### What happened? gemini-3.1-pro-preview isn't in the models list ### What did you expect to happen? gemini-3.1-pro-preview is in the models list ### Client information <details> <summary>Client Information</summary> Run `gemini` to enter the interactive CLI, then run the `/abou...\n  > \ud83d\udcac **@scidomino** (\ud83d\udc4d 119): I assure you, we are working on it. :D\n  > \ud83d\udcac **@guidedways** (\ud83d\udc4d 40): The marketing team needs to stay in sync with the CLI team or the otherway around > Where you can access Gemini 3.1 Pro: Gemini 3.1 Pro is available starting today in > preview in [Vertex AI](https://cloud.google.com/vertex-ai?e=48754805) a...\n- **[TOP-VOTED] [google-gemini/gemini-cli#3132](https://github.com/google-gemini/gemini-cli/issues/3132) \u2014 [Agents] Post V1.0 Work** (\ud83d\udc4d 50 | \ud83d\udcac 46)\n  > ### What would you like to be added? This FR requests the implementation of a new SubAgent class: A re-usable component that manages LLM driven tool orchestration. This is applicable in the following contexts: * Allowing a Tool to iteratively solve a problem it encounters. For ex...\n  > \ud83d\udcac **@faw01** (\ud83d\udc4d 60): surprised gemini cli doesn't already have this! subagents are a big part of cc's success\n  > \ud83d\udcac **@abhipatel12** (\ud83d\udc4d 46): Hey @rome2o! We'll start making updates on this thread soon! Def working on it!\n- **[TOP-VOTED] [n8n-io/n8n#14361](https://github.com/n8n-io/n8n/issues/14361) \u2014 AI Agent doesn't store the Tool usages in memory** (\ud83d\udc4d 29 | \ud83d\udcac 57)\n  > ### Bug Description The current implementation of the AI Agent and the Memory nodes stores only the input and output messages, not the Tool messages. **Why is this important?** Have you noticed the agent claiming that it called a tool but didn't? Despite the flaws of the models, ...\n  > \ud83d\udcac **@GuillaumeRoy** (\ud83d\udc4d 24): I'd suggest this should rank much higher than \"enhancement request\". Consider this scenario: - You're interacting with an agent. It creates a record in a data store at your request via a tool. Let's say, saving a contact. This returns a con...\n  > \ud83d\udcac **@GuillaumeRoy** (\ud83d\udc4d 15): Hi @Joffcom, Just want to bring this to your attention. In addition to the example I've given above, I am now seeing multiple models hallucinating tool calls due to this shortcoming. - User request leads to a tool call. - **Agent executes t...\n- **[TOP-VOTED] [n8n-io/n8n#16005](https://github.com/n8n-io/n8n/issues/16005) \u2014 Bearer Authentication Not Working with HTTP Request Node Pagination** (\ud83d\udc4d 22 | \ud83d\udcac 13)\n  > ### Bug Description When using the HTTP Request node with Bearer authentication and pagination enabled, the authorization header is not passed through, resulting in a 401 \"Unauthorized\" error. The same request works correctly without pagination enabled. ### To Reproduce 1. Create...\n  > \ud83d\udcac **@ddean6232** (\ud83d\udc4d 3): > Hello team, +1 here. Without pagination everything works, but with pagination it always 401. Version 1.97.1. > > Also, would be good to have some REST logs to see what request the system sends and what responses receives (similar to Postm...\n  > \ud83d\udcac **@wesley-ferreti** (\ud83d\udc4d 1): Same here, trying to integrate with Slack API to get history of conversations from a channel, but when I try to configure native pagination within the HTTP Request node, it doesn't work. Slack has a cursor mechanism for pagnation, where the...\n- **[TOP-VOTED] [google-gemini/gemini-cli#1982](https://github.com/google-gemini/gemini-cli/issues/1982) \u2014 Audio input instead of typing** (\ud83d\udc4d 15 | \ud83d\udcac 8)\n  > ### What would you like to be added? Amazing work. But I would love to be able to talk with the agent instead of typing all the time. I use Copilot in VS Code most of the time, and it's a feature that I love about it. Thanks. :) ### Why is this needed? Speaking is often faster th...\n- **[TOP-VOTED] [n8n-io/n8n#36972](https://github.com/n8n-io/n8n/issues/36972) \u2014 Regression in 2.36.5 \u2014 Mistral Chat Model node fails with \"Failed to parse URL from [object Request]\" (works in 2.35.4)** (\ud83d\udc4d 8 | \ud83d\udcac 13)\n  > ### Bug Description Every call through the Mistral Cloud Chat Model node (`@n8n/n8n-nodes-langchain.lmChatMistralCloud`, typeVersion 1) fails immediately on n8n Cloud 2.36.5. The same workflow, with the same API key and the same model, works correctly on a second n8n Cloud instan...\n- **[TOP-VOTED] [n8n-io/n8n#25360](https://github.com/n8n-io/n8n/issues/25360) \u2014 Timeout setting does not work for Ollama node when it takes more than 5 minutes** (\ud83d\udc4d 8 | \ud83d\udcac 10)\n  > ### Bug Description Whenever there is an Ollama node in the execution flow, if for some reason the request takes more than 5 minutes, it always fails regardless of the following settings on n8n env: ``` N8N_AI_TIMEOUT=36000000 N8N_AI_TIMEOUT_MAX=36000000 EXECUTIONS_TIMEOUT_MAX=36...\n- **[TOP-VOTED] [n8n-io/n8n#24042](https://github.com/n8n-io/n8n/issues/24042) \u2014 AI Agent node: Tool node errors fail workflow instead of returning error to agent for handling** (\ud83d\udc4d 7 | \ud83d\udcac 17)\n  > ### Bug Description When using the AI Agent node with tool nodes (e.g., Jira tools), any error returned by the tool causes the entire workflow to fail immediately. The error is not passed back to the AI Agent for processing, which prevents the agent from implementing error-handli...\n\n## 6. System Architecture Diagrams\n\n### System Topology\n\n```mermaid\nflowchart TD\n    subgraph Agents[\"Autonomous Agents\"]\n        Nemo[NemoClaw]\n        OpenClaw[OpenClaw]\n        Muse[Muse]\n        OtherAgents[Other Agents]\n    end\n\n    subgraph ClawBridge[\"ClawBridge Core Gateway\"]\n        MCPAdapter[\"MCP Server & REST Gateway\\n(FastMCP / stdio + SSE)\"]\n        AuthZ[\"Agent Identity & ACL Checker\\n(Bearer Token Auth)\"]\n        Vault[\"Encrypted Vault & Token Manager\\n(SQLite WAL + AES-256-GCM)\"]\n        RateLimiter[\"Token-Bucket Rate Limiter\\n(Egress Throttle & Backoff)\"]\n        Dispatcher[\"Egress Dispatcher\\n(HTTP/2 Client + Auth Headers)\"]\n        WebhookIngest[\"Inbound Webhook Normalizer\\n(HMAC Verification & Dedup)\"]\n        EventStream[\"Agent Event Queue\\n(SSE Real-Time Push)\"]\n    end\n\n    subgraph Downstream[\"Outbound Channels & External Services\"]\n        Social[\"Social Platforms\\n(X/Twitter, LinkedIn, Discord, Telegram)\"]\n        Enterprise[\"Enterprise & Productivity\\n(Slack, Jira, GitHub, Notion)\"]\n    end\n\n    Nemo -->|MCP Tool Calls| MCPAdapter\n    OpenClaw -->|MCP Tool Calls| MCPAdapter\n    Muse -->|MCP Tool Calls| MCPAdapter\n    OtherAgents -->|MCP Tool Calls| MCPAdapter\n\n    MCPAdapter --> AuthZ\n    AuthZ --> RateLimiter\n    RateLimiter --> Dispatcher\n    Vault <-->|JIT Decryption & Auto Refresh| Dispatcher\n\n    Dispatcher -->|Authenticated Egress API| Social\n    Dispatcher -->|Authenticated Egress API| Enterprise\n\n    Social -.->|Inbound Webhooks| WebhookIngest\n    Enterprise -.->|Inbound Webhooks| WebhookIngest\n\n    WebhookIngest --> Vault\n    WebhookIngest --> EventStream\n    EventStream -.->|SSE Events| Agents\n```\n\n### Request / Execution Lifecycle\n\n```mermaid\nsequenceDiagram\n    autonumber\n    participant Agent as Autonomous Agent (e.g. NemoClaw)\n    participant Gateway as ClawBridge MCP Gateway\n    participant Vault as Encrypted Vault (SQLite WAL)\n    participant API as External Platform (e.g. Slack / Jira)\n\n    Note over Agent,Gateway: Outbound Tool Invocation Flow\n    Agent->>Gateway: tools/call (slack_post_message, args, agent_token)\n    Gateway->>Gateway: Validate Agent Identity & ACL Policy\n    Gateway->>Gateway: Check Channel Rate Limiter\n    Gateway->>Vault: Fetch Channel OAuth Token (JIT Decrypt)\n    alt Token Expired?\n        Vault->>API: Single-Flight OAuth Refresh Request\n        API-->>Vault: Return Fresh Access Token\n        Vault->>Vault: Store Re-Encrypted Token\n    end\n    Gateway->>API: POST /api/chat.postMessage (Bearer Token)\n    alt Downstream Success\n        API-->>Gateway: HTTP 200 {ok: true, ts: \"...\"}\n        Gateway-->>Agent: tool_result {status: \"success\", receipt: {...}}\n    else Downstream Rate Limited (429)\n        API-->>Gateway: HTTP 429 Too Many Requests (Retry-After: 10)\n        Gateway-->>Agent: tool_result {status: \"error\", code: \"RATE_LIMITED\", retry_after_s: 10}\n    end\n\n    Note over Gateway,Agent: Inbound Webhook Event Flow\n    API-->>Gateway: Inbound Webhook (HMAC Header, Payload)\n    Gateway->>Gateway: Verify HMAC Signature & Freshness (<300s)\n    Gateway->>Vault: Deduplicate Delivery ID\n    Gateway-->>Agent: Push Event via SSE topic (channel_mention)\n```\n\n### Architecture Trade-Off Matrix\n\n| Option | Pros | Cons | Verdict |\n| :--- | :--- | :--- | :--- |\n| **Zero-Trust MCP Execution Proxy** | Raw secrets never touch LLM context, unified tool schema | Gateway becomes single point of failure | Selected (ADR-0001) |\n| **Direct Credential Distribution** | Simple implementation, agents make direct HTTP calls | Massive security risk, token leakage in prompts, fragmented refresh logic | Rejected |\n| **Embedded SQLite WAL with AES-GCM** | Zero external infrastructure dependencies, fast local ACID transactions | Requires manual replication if clustering across multiple machines | Selected (ADR-0002) |\n| **External HashiCorp Vault** | Enterprise HA and centralized key management | Heavy operational overhead and high barrier for local agent development | Rejected |\n\n## 7. Decision Ledger (ADRs)\n\n### ADR-0001: Zero-Trust Agent Egress Proxy\n- **Decision:** Agents authenticate to ClawBridge with an Agent Bearer Token; ClawBridge retrieves platform credentials from the internal vault, attaches authentication headers, and dispatches requests. Raw platform secrets and tokens are never exposed to agents or LLM contexts.\n- **Rationale:** Direct token distribution leaves credentials vulnerable to prompt injection exfiltration, context log leaking, and decentralized token management.\n- **Rejected Alternatives:** Direct secret distribution to agents (where agents fetch tokens from ClawBridge and make direct API calls to Slack/Jira/X).\n\n### ADR-0002: Embedded Encrypted SQLite WAL Vault\n- **Decision:** Store platform credentials, OAuth tokens, and audit logs in a local SQLite database in WAL mode encrypted with AES-256-GCM via a master key, utilizing Authlib for automated background refresh cycles.\n- **Rationale:** Zero external infrastructure dependencies for developers while preventing token leakage and enabling seamless background OAuth rotation.\n- **Rejected Alternatives:** External secret management daemons (HashiCorp Vault, AWS Secrets Manager) or plaintext environment variables.\n\n### ADR-0003: Bi-Directional Egress MCP & Inbound SSE Stream\n- **Decision:** Implement dual-mode communication: outbound tool calling over Model Context Protocol (stdio / SSE) and inbound webhook normalization streaming into agent-subscribed SSE topics with cryptographic HMAC signature verification.\n- **Rationale:** Modern autonomous agents (NemoClaw, Muse, OpenClaw) require event-driven reactive wakeups (e.g. Slack mentions, Jira issue updates) alongside proactive tool execution.\n- **Rejected Alternatives:** Outbound-only gateway or raw unverified webhook proxies.\n\n### ADR-0004: Per-Channel Token-Bucket Rate Limiting & Normalized Errors\n- **Decision:** Implement an internal per-channel token bucket rate limiter and transform downstream API errors into structured, machine-readable JSON receipts with retry-after metadata.\n- **Rationale:** Prevents agent execution crashes (addressing n8n-io/n8n#24042) and avoids triggering severe downstream API bans.\n- **Rejected Alternatives:** Pass-through raw HTTP errors or unhandled socket exceptions.\n\n## 8. Implementation Plan\n\n1. Core Encrypted SQLite Vault & Credentials Model :: Schema, AES-256-GCM envelope encryption, Authlib OAuth token model, and migrations ::\n2. Agent Identity & Scoped Access Control Layer :: Agent token generation, authentication middleware, and per-tool granular ACL enforcement :: Step 1\n3. Outbound Egress Dispatcher & Token-Bucket Rate Limiter :: HTTP/2 client with JIT token attachment, exponential backoff, and error normalizer :: Step 2\n4. FastMCP Server & Tool Definitions :: Model Context Protocol server exposing Slack, Jira, Twitter/X, and Discord tool actions :: Step 3\n5. Inbound Webhook Receiver & SSE Event Stream :: HMAC signature validation, delivery deduplication, and agent-subscribed SSE event topics :: Step 4\n6. End-to-End Verification & Multi-Agent Test Harness :: Automated integration test suite validating NemoClaw/OpenClaw simulation calls :: Step 5\n";
+  if (typeof mermaid !== 'undefined') {
+    mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' });
+  }
+  function showTab(tabId, btn) {
+    document.querySelectorAll('.tab-panel').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+    document.getElementById(tabId).classList.add('active');
+    btn.classList.add('active');
+  }
+  function copySpecMarkdown(btn) {
+    navigator.clipboard.writeText(SPEC_MARKDOWN).then(() => {
+      const orig = btn.textContent;
+      btn.textContent = "Copied SPEC.md to Clipboard!";
+      setTimeout(() => { btn.textContent = orig; }, 2000);
+    });
+  }
+</script>
+</body>
+</html>
