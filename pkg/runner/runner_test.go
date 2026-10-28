@@ -563,3 +563,54 @@ func TestOrchestrator_GuardrailApprovalGating(t *testing.T) {
 
 	orch.StopAll()
 }
+
+func TestConsole_UniversalConnectorAndBridgeCommands(t *testing.T) {
+	reg, agentsDir, cleanup := setupTestEnvironment(t)
+	defer cleanup()
+
+	key, _ := vault.GenerateKey()
+	cipher, _ := vault.NewEnvelopeCipher(key)
+	credVault := vault.NewCredentialVault(reg.DatabaseManager(), cipher)
+	limiter := dispatch.NewTokenBucketLimiter(nil)
+	dispatcher := dispatch.NewEgressDispatcher(credVault, limiter, nil)
+	tools := mcp.NewTools(dispatcher, nil, nil)
+
+	outBuf := &bytes.Buffer{}
+	orch := runner.NewOrchestrator(agentsDir, reg, nil, tools, nil, outBuf)
+
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	inputCommands := "tools\nvault\nbridge openclaw\nbridge nemoclaw\nhelp\nexit\n"
+	inBuf := strings.NewReader(inputCommands)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	err := runner.RunConsoleWithConfig(ctx, runner.ConsoleConfig{
+		In:           inBuf,
+		Out:          outBuf,
+		Orchestrator: orch,
+		Vault:        credVault,
+		Registry:     reg,
+		AgentsDir:    agentsDir,
+		Tools:        tools,
+	})
+	if err != nil {
+		t.Fatalf("console returned error: %v", err)
+	}
+
+	outStr := outBuf.String()
+	if !strings.Contains(outStr, "Active Model Context Protocol (MCP) Tools") {
+		t.Errorf("expected MCP tools output, got:\n%s", outStr)
+	}
+	if !strings.Contains(outStr, "ClawBridge Encrypted Vault") {
+		t.Errorf("expected vault status output, got:\n%s", outStr)
+	}
+	if !strings.Contains(outStr, "Successfully configured OpenClaw MCP bridge") {
+		t.Errorf("expected OpenClaw bridge output, got:\n%s", outStr)
+	}
+	if !strings.Contains(outStr, "Successfully configured NVIDIA OpenShell sandbox policy") {
+		t.Errorf("expected NVIDIA NemoClaw bridge output, got:\n%s", outStr)
+	}
+}

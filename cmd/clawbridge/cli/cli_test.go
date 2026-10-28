@@ -88,3 +88,52 @@ func TestCLI_ConnectGemini(t *testing.T) {
 	}
 }
 
+func TestCLI_BridgeSubcommand(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	out := &bytes.Buffer{}
+	errOut := &bytes.Buffer{}
+
+	// Test bridge openclaw
+	code := cli.Execute([]string{"bridge", "openclaw"}, nil, out, errOut)
+	if code != 0 {
+		t.Fatalf("expected code 0, got %d: %s", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "Successfully configured OpenClaw MCP integration") {
+		t.Errorf("unexpected output: %s", out.String())
+	}
+
+	// Test bridge nemoclaw
+	out.Reset()
+	errOut.Reset()
+	code = cli.Execute([]string{"bridge", "nemoclaw"}, nil, out, errOut)
+	if code != 0 {
+		t.Fatalf("expected code 0, got %d: %s", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "Successfully configured NVIDIA OpenShell sandbox policy") {
+		t.Errorf("unexpected output: %s", out.String())
+	}
+}
+
+func TestCLI_AgentList(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("CLAWBRIDGE_HOME", tempDir)
+
+	out := &bytes.Buffer{}
+	errOut := &bytes.Buffer{}
+
+	_ = cli.Execute([]string{"agent", "create", "botalpha"}, nil, out, errOut)
+
+	out.Reset()
+	errOut.Reset()
+	code := cli.Execute([]string{"agent", "list"}, nil, out, errOut)
+	if code != 0 {
+		t.Fatalf("expected code 0, got %d: %s", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "botalpha") {
+		t.Errorf("expected botalpha in list, got: %s", out.String())
+	}
+}
+
+

@@ -37,11 +37,11 @@ fi
 TARGET="${INSTALL_DIR}/clawbridge"
 echo "Installing ClawBridge to ${TARGET}..."
 
-# 1. If local binary exists in dist/ or bin/, use it
-if [ -f "dist/${BIN_NAME}" ]; then
-    cp "dist/${BIN_NAME}" "$TARGET"
-elif [ -f "bin/clawbridge" ]; then
+# 1. If local binary exists in bin/ or dist/, use it
+if [ -f "bin/clawbridge" ]; then
     cp "bin/clawbridge" "$TARGET"
+elif [ -f "dist/${BIN_NAME}" ]; then
+    cp "dist/${BIN_NAME}" "$TARGET"
 else
     # 2. Download release binary from GitHub releases with fail flag (-f)
     URL="https://github.com/${REPO}/releases/download/v${VERSION}/${BIN_NAME}"

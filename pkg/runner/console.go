@@ -6,11 +6,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"clawbridge/pkg/agents"
 	"clawbridge/pkg/auth"
+	"clawbridge/pkg/bridge"
 	"clawbridge/pkg/inbound"
+	"clawbridge/pkg/mcp"
 	"clawbridge/pkg/vault"
 	"clawbridge/pkg/wizard"
 )
@@ -24,6 +27,7 @@ type ConsoleConfig struct {
 	Vault        *vault.CredentialVault
 	Registry     *auth.AgentRegistry
 	AgentsDir    string
+	Tools        *mcp.Tools
 }
 
 // RunConsole runs the hybrid interactive CLI and reactive inbound webhook listener.
@@ -117,20 +121,77 @@ func RunConsoleWithConfig(ctx context.Context, cfg ConsoleConfig) error {
 
 		case lowerLine == "help":
 			fmt.Fprintln(out, "Available Commands:")
-			fmt.Fprintln(out, "  Agent Instructions:")
-			fmt.Fprintln(out, "    <agent_name>: <task>     - Send a direct instruction to an agent")
-			fmt.Fprintln(out, "    broadcast: <task>        - Send an instruction to all running agents")
+			fmt.Fprintln(out, "  Universal Connector & MCP Tools:")
+			fmt.Fprintln(out, "    tools                    - List all active Model Context Protocol (MCP) tools")
+			fmt.Fprintln(out, "    vault                    - Inspect encrypted credentials and token refresh state")
+			fmt.Fprintln(out, "    connect [app]            - Connect platforms (Slack, Jira, GitHub, Google, Meta, etc.)")
 			fmt.Fprintln(out, "")
-			fmt.Fprintln(out, "  Management & Configuration:")
-			fmt.Fprintln(out, "    connect [app]            - Connect platforms (Slack, Jira, etc.) or LLMs")
-			fmt.Fprintln(out, "    config                   - Configure per-agent access permissions")
-			fmt.Fprintln(out, "    agent create <name>      - Create and start a new autonomous agent")
-			fmt.Fprintln(out, "    run <agent>              - Start an inactive agent")
-			fmt.Fprintln(out, "    list                     - List all running agents")
-			fmt.Fprintln(out, "    status                   - Show agent turn counts and active memory")
+			fmt.Fprintln(out, "  Official Upstream Claws Bridge:")
+			fmt.Fprintln(out, "    bridge openclaw          - Configure OpenClaw MCP integration (~/.openclaw/openclaw.json)")
+			fmt.Fprintln(out, "    bridge nemoclaw          - Configure NVIDIA NemoClaw sandbox (~/.nemoclaw/sandbox.yaml)")
+			fmt.Fprintln(out, "    run openclaw [args...]   - Launch official OpenClaw with ClawBridge MCP tools")
+			fmt.Fprintln(out, "    run nemoclaw [args...]   - Launch official NVIDIA NemoClaw / OpenShell stack")
+			fmt.Fprintln(out, "")
+			fmt.Fprintln(out, "  Console Controls:")
 			fmt.Fprintln(out, "    clear                    - Clear terminal console screen")
 			fmt.Fprintln(out, "    help                     - Show this guidance message")
 			fmt.Fprintln(out, "    exit / quit              - Leave the console")
+
+		case lowerLine == "tools":
+			if cfg.Tools == nil {
+				fmt.Fprintln(out, "MCP tool registry not available in this session.")
+				continue
+			}
+			toolList := cfg.Tools.ListTools()
+			fmt.Fprintf(out, "Active Model Context Protocol (MCP) Tools (%d):\n", len(toolList))
+			for _, t := range toolList {
+				fmt.Fprintf(out, "  - %-26s %s\n", t.Name, t.Description)
+			}
+
+		case lowerLine == "vault":
+			if cfg.Vault == nil {
+				fmt.Fprintln(out, "Encrypted vault not available in this session.")
+				continue
+			}
+			fmt.Fprintln(out, "ClawBridge Encrypted Vault (SQLite WAL, AES-256-GCM):")
+			channels := []string{"slack", "jira", "discord", "twitter", "github", "telegram", "whatsapp", "meta", "google", "gemini", "openai", "anthropic"}
+			connected := 0
+			for _, ch := range channels {
+				if cred, err := cfg.Vault.GetCredentialByChannel(ch); err == nil && cred != nil {
+					fmt.Fprintf(out, "  - %-12s Connected (ID: %s)\n", ch, cred.ID)
+					connected++
+				}
+			}
+			if connected == 0 {
+				fmt.Fprintln(out, "  No platforms connected yet. Type 'connect' to connect your first platform.")
+			}
+
+		case strings.HasPrefix(lowerLine, "bridge "):
+			parts := strings.Fields(line)
+			if len(parts) < 2 {
+				fmt.Fprintln(out, "Usage: bridge <openclaw|nemoclaw>")
+				continue
+			}
+			target := strings.ToLower(parts[1])
+			selfBin, _ := os.Executable()
+			switch target {
+			case "openclaw":
+				cfgFile, err := bridge.ConfigureOpenClawBridge("", selfBin)
+				if err != nil {
+					fmt.Fprintf(out, "OpenClaw bridge error: %v\n", err)
+				} else {
+					fmt.Fprintf(out, "Successfully configured OpenClaw MCP bridge at '%s'.\n", cfgFile)
+				}
+			case "nemoclaw":
+				policyFile, err := bridge.ConfigureNemoClawBridge("", selfBin)
+				if err != nil {
+					fmt.Fprintf(out, "NVIDIA NemoClaw bridge error: %v\n", err)
+				} else {
+					fmt.Fprintf(out, "Successfully configured NVIDIA OpenShell sandbox policy at '%s'.\n", policyFile)
+				}
+			default:
+				fmt.Fprintf(out, "Unknown bridge target: '%s'. Use 'bridge openclaw' or 'bridge nemoclaw'.\n", target)
+			}
 
 		case lowerLine == "list":
 			running := orch.ListRunning()
@@ -217,10 +278,23 @@ func RunConsoleWithConfig(ctx context.Context, cfg ConsoleConfig) error {
 		case strings.HasPrefix(lowerLine, "run ") || strings.HasPrefix(lowerLine, "start "):
 			parts := strings.Fields(line)
 			if len(parts) < 2 {
-				fmt.Fprintln(out, "Usage: run <agent_name>")
+				fmt.Fprintln(out, "Usage: run <openclaw|nemoclaw|agent_name>")
 				continue
 			}
 			agentName := strings.ToLower(strings.TrimSpace(parts[1]))
+			selfBin, _ := os.Executable()
+			if agentName == "openclaw" {
+				if err := bridge.RunOpenClaw(ctx, "", selfBin, parts[2:], nil, in, out, out); err != nil {
+					fmt.Fprintf(out, "OpenClaw run error: %v\n", err)
+				}
+				continue
+			}
+			if agentName == "nemoclaw" {
+				if err := bridge.RunNemoClaw(ctx, "", selfBin, parts[2:], nil, in, out, out); err != nil {
+					fmt.Fprintf(out, "NemoClaw run error: %v\n", err)
+				}
+				continue
+			}
 			if orch.IsRunning(agentName) {
 				fmt.Fprintf(out, "Agent '%s' is already running.\n", agentName)
 				continue

@@ -5,43 +5,39 @@
 [![Go Version](https://img.shields.io/badge/Go-1.22%2B-00ADD8.svg)](https://go.dev)
 [![Zero CGO](https://img.shields.io/badge/CGO-disabled-brightgreen.svg)](https://golang.org)
 
-Zero-Trust Agent Egress Gateway, Credential Vault, and 24/7 Multi-Agent Daemon for Autonomous AI.
+Zero-Trust Universal Connector, Credential Isolation Vault, and Model Context Protocol (MCP) Gateway for Autonomous AI Agents.
 
 ---
 
 ## Overview
 
-ClawBridge is an ultra-lightweight, high-performance security gateway, credential isolation vault, and 24/7 multi-agent daemon written in pure Go (`CGO_ENABLED=0`).
+ClawBridge is an ultra-lightweight, high-performance security gateway, credential isolation vault, and 24/7 background daemon written in pure Go (`CGO_ENABLED=0`).
 
-It is designed for autonomous AI systems (including NemoClaw, OpenClaw, Gemini, and proprietary agents such as Muse or Claude Desktop) that require continuous, long-running connectivity to external platforms (Slack, Jira, GitHub, Discord, Twitter/X) without exposing production credentials or exhausting system memory.
+It is designed to be the **Universal Connector & MCP Gateway** for autonomous agent ecosystems:
+* **OpenClaw** ([openclaw.ai](https://openclaw.ai)) — Peter Steinberger's multi-channel personal assistant and agent runtime.
+* **NVIDIA NemoClaw** ([github.com/NVIDIA/NemoClaw](https://github.com/NVIDIA/NemoClaw)) — NVIDIA's enterprise sandboxed reference stack powered by NVIDIA OpenShell and NeMo Guardrails.
+* **External Agents & IDEs** — Claude Desktop, Cursor, LangChain, CrewAI, and proprietary agents connecting via Model Context Protocol (`clawbridge mcp`).
 
 ### The Problem
 
-When autonomous agents interact with external platforms, granting them direct access to production API keys or OAuth refresh tokens introduces severe risks:
+When autonomous agents interact with external platforms (Slack, Jira, GitHub, Discord, Twitter, Google Workspace, Meta, Telegram, WhatsApp), granting them direct access to production API keys or OAuth refresh tokens introduces severe risks:
 
-- **Prompt Injection and Exfiltration:** Malicious instructions in prompt contexts or uncurated external inputs can trick LLMs into exposing raw keys or session credentials.
-- **Context Leaks:** API keys, access tokens, and sensitive headers easily leak into conversation history, token logs, telemetry, and debugging artifacts.
-- **Uncontrolled Blast Radius:** Direct access lacks centralized rate limiting, per-agent action whitelisting, or audit trails, risking cascading API bans and unintentional service outages.
-- **Resource Bloat in 24/7 Daemons:** Traditional multi-repo Python agents consume hundreds of megabytes of RAM and leak memory over time as conversation histories grow unbounded.
+- **Prompt Injection & Key Exfiltration:** Malicious instructions in prompt contexts or uncurated external messages can trick LLMs into exposing raw keys or session credentials.
+- **Credential Fragmentation ($N \times M$ Nightmare):** Configuring keys and OAuth refresh tokens separately inside every individual agent and framework is error-prone and insecure.
+- **Uncoordinated Rate Limits:** When multiple agents dispatch tasks concurrently, uncoordinated requests trigger HTTP 429 rate limits and platform bans.
+- **OAuth Token Expiration:** OAuth tokens expire while agents are running 24/7 in the background, causing unexpected `401 Unauthorized` job failures.
 
 ### The ClawBridge Solution
 
-ClawBridge decouples agent intelligence from credentials using a Zero-Trust architecture:
+ClawBridge completely decouples agent intelligence from credentials using a Zero-Trust architecture:
 
 1. **Pure Go Static Binary:** Compiles with zero CGO dependencies to a single static binary (< 12MB disk, < 15MB RAM baseline, < 5ms startup). Runs on macOS, Linux, Raspberry Pi, Android/Termux, and Windows.
-2. **Single-Repository Model:** Native open-source agent runtimes (`nemoclaw`, `openclaw`) live directly in `agents/` in this repository. External proprietary agents (Muse, Claude Desktop, Cursor) connect via Model Context Protocol (`clawbridge mcp`).
-3. **Universal Access with Granular Tuning:** Agents have universal access by default (`*`), or administrators can customize per-agent app permissions via the interactive wizard (`clawbridge config`).
-4. **Embedded AES-256-GCM Vault:** Platform OAuth tokens and API secrets are stored locally in SQLite WAL mode using AES-256-GCM envelope encryption, with single-flight deduplication for automatic token refresh cycles.
-5. **Auto-Pruned Sliding Context Window:** Retains exactly the last 15 conversation turns per agent in memory, permanently capping RAM usage under 15MB regardless of how long agents run.
-6. **24/7 Daemon Architecture:** Native OS background service management (`launchd` on macOS, `systemd` on Linux), supervisor watchdog with 2-second panic auto-restart, proactive 10-minute token refresher, sleep/wake network jump recovery, and 10MB x 3 file log rotation.
-
-### How Multiple Agents Share Connectors (Universal Connectivity)
-
-- **One Setup for All Apps:** You configure your Slack bot token, Jira credentials, Twitter API keys, Discord bot token, and GitHub personal access token in ClawBridge once. You never have to configure those apps inside individual agents.
-- **Universal Multi-Tasking:** Every agent is general-purpose and can connect to any integrated application to perform any task, individually or simultaneously.
-- **Coordinated Rate Limiting Across Agents:** If NemoClaw and OpenClaw both try to send messages to Slack simultaneously, ClawBridge queues and paces them so they share the platform quota without triggering downstream rate-limit bans.
-- **Shared Background Token Refreshes:** When an OAuth token expires, ClawBridge refreshes it once behind the scenes using single-flight deduplication. Neither agent experiences interruption; their requests continue to work uninterrupted.
-- **Shared Inbound Event Switchboard:** When an inbound webhook arrives from Slack, Jira, or GitHub, ClawBridge cryptographically verifies HMAC signatures and routes the event directly to subscribed agents.
+2. **Connect Once, Share Everywhere:** You configure your platforms (Slack, Jira, GitHub, Discord, Twitter, Telegram, WhatsApp, Meta, Google Workspace) in ClawBridge once via `clawbridge connect`. All agents share connectivity without ever seeing raw keys.
+3. **Model Context Protocol (MCP) Gateway:** Exposes 22+ standardized tools over stdio JSON-RPC 2.0 (`clawbridge mcp`). Any agent speaking MCP connects out-of-the-box.
+4. **First-Class Official OpenClaw & NVIDIA NemoClaw Bridge:** One-command configuration (`clawbridge bridge openclaw` and `clawbridge bridge nemoclaw`) and native runner (`clawbridge run openclaw` and `clawbridge run nemoclaw`).
+5. **Embedded AES-256-GCM Vault:** Platform OAuth tokens and API secrets are stored locally in SQLite WAL mode using AES-256-GCM envelope encryption, with single-flight deduplication for automatic token refresh cycles.
+6. **Token-Bucket Rate Limiter:** Enforces per-channel burst and rate controls across all running agents, preventing downstream API bans.
+7. **24/7 Background Daemon:** Native OS background service management (`launchd` on macOS, `systemd` on Linux) with panic recovery, proactive 10-minute token refresher, and sleep/wake network recovery.
 
 ---
 
@@ -49,30 +45,27 @@ ClawBridge decouples agent intelligence from credentials using a Zero-Trust arch
 
 ```
 =================================================================================
-                                  ClawBridge CLI
-             (Single Repository: Clone Once, Run Everything 24/7)
+                                Autonomous Agents
 =================================================================================
-                                        |
-     +----------------------------------+----------------------------------+
-     |                                  |                                  |
-     v                                  v                                  v
-+-----------------------+  +-----------------------+  +-----------------------+
-|       NemoClaw        |  |       OpenClaw        |  |    External Agents    |
-|   (Built-in Agent)    |  |   (Built-in Agent)    |  |  (Muse, Claude, etc.) |
-|  General Purpose ACL  |  |  Engineering ACL      |  |  Via Model Context    |
-|  Sliding Window (15)  |  |  Sliding Window (15)  |  |  Protocol (MCP Stdio) |
-+-----------------------+  +-----------------------+  +-----------------------+
-     |                                  |                                  |
-     +----------------------------------+----------------------------------+
-                                        |
-                    (clw_agent_* Tokens & Scoped Policies)
-                                        v
+         |                                |                             |
+         v                                v                             v
++------------------+            +-------------------+         +-----------------+
+|     OpenClaw     |            |  NVIDIA NemoClaw  |         | External Agents |
+|  (openclaw.ai)   |            | (OpenShell & Rails|         | (Claude, Cursor,|
+| ~/.openclaw/     |            |  ~/.nemoclaw/     |         |  LangChain, etc)|
++------------------+            +-------------------+         +-----------------+
+         |                                |                             |
+         +--------------------------------+-----------------------------+
+                                          |
+                              (Model Context Protocol)
+                                    stdio JSON-RPC
+                                          v
 +-------------------------------------------------------------------------------+
-|                                ClawBridge Core                                |
+|                        ClawBridge Universal Gateway                           |
 |                                                                               |
 |  +-------------------------+             +---------------------------------+  |
-|  |   Agent Authenticator   |             |        Event Broadcaster        |  |
-|  |     & Policy Engine     |             |       (Pub-Sub SSE Topics)      |  |
+|  |     MCP Tool Server     |             |        Event Broadcaster        |  |
+|  | (22+ Normalized Tools)  |             |       (Pub-Sub SSE Topics)      |  |
 |  +-------------------------+             +---------------------------------+  |
 |               |                                            ^                  |
 |  +-------------------------+             +---------------------------------+  |
@@ -95,28 +88,28 @@ ClawBridge decouples agent intelligence from credentials using a Zero-Trust arch
 |  |      Panic Recovery (2s) | Proactive Refresher (10m) | Sleep/Wake Detection|
 |  +-------------------------------------------------------------------------+  |
 +-------------------------------------------------------------------------------+
-         |                     |                     |                     |
-         v                     v                     v                     v
-     [ Slack ]             [ Jira ]             [ Twitter ]           [ Discord ]
+    |        |        |        |        |        |        |        |        |
+    v        v        v        v        v        v        v        v        v
+ [Slack]  [Jira]  [GitHub] [Discord][Twitter][Telegram][WhatsApp][ Meta ][Google]
 ```
 
 ---
 
-## Key Features
+## Universal Connectors & MCP Tools
 
-- **Zero-Trust Credential Isolation:** Raw API keys, basic auth secrets, and OAuth refresh tokens never reach agent contexts or LLM prompts.
-- **Embedded AES-256-GCM Vault:** Backed by SQLite in WAL (Write-Ahead Logging) mode. All credentials and OAuth secrets are encrypted at rest with high-entropy nonces.
-- **Single-Flight OAuth Refresh:** When multiple concurrent agent requests encounter an expired token, the refresh operation is deduplicated so the downstream OAuth provider is called exactly once.
-- **Fine-Grained Agent Identity and ACLs:** Define exact permission scopes per agent (e.g., `slack:post_message`, `jira:read*`, `*`). Requests violating policy are rejected immediately.
-- **Per-Channel Token Bucket Rate Limiting:** Enforces configurable burst capacities and replenishment rates per platform. Automatically applies backoff windows when downstream platforms return HTTP 429.
-- **Normalized Execution Receipts:** Outbound actions return a unified `EgressReceipt` with status codes, machine-readable error codes (`UNAUTHORIZED`, `RATE_LIMITED`, `DOWNSTREAM_ERROR`), and `retry_after_s` metadata.
-- **Model Context Protocol (MCP) Integration:** Exposes normalized tools (`slack_post_message`, `jira_create_issue`, `twitter_post_tweet`, `discord_send_message`) directly through stdio JSON-RPC 2.0.
-- **Cryptographic Webhook Verification:** Verifies inbound signatures (Slack `v0=...`, GitHub / generic `sha256=...`), enforces a 300-second freshness window against clock skew, and deduplicates delivery IDs in SQLite to block replay attacks.
-- **Asynchronous Inbound SSE Broadcaster:** Dispatches normalized inbound events (`InboundEvent`) to listening agents matching topic subscriptions and wildcards.
-- **Supervisor Watchdog:** Catches panics in agent worker goroutines with automatic 2-second recovery.
-- **Proactive Token Refresher:** Background ticker inspecting OAuth tokens every 10 minutes and refreshing any token within 5 minutes of expiration.
-- **Sleep/Wake Network Recovery:** Detects system sleep/wake clock jumps and re-establishes connectivity automatically.
-- **Capped Log Rotation:** Rotates at 10MB with maximum 3 backup files, keeping total log and database footprint permanently under 35MB.
+ClawBridge exposes standardized tools via Model Context Protocol (MCP). Agents never handle credentials directly.
+
+| Platform | Tools Exposed via MCP | Capabilities | Risk Level |
+|---|---|---|---|
+| **Slack** | `slack_post_message`, `slack_read_channel` | Send channel messages, read history | Standard / Low |
+| **Jira** | `jira_create_issue`, `jira_search_issues` | Create tickets, JQL search queries | Standard / Low |
+| **GitHub** | `github_create_issue`, `github_create_pull_request`, `github_read_repository` | Create issues, open PRs, read repos | Standard / Medium |
+| **Discord** | `discord_send_message`, `discord_read_channel` | Bot messaging, inspect channel logs | Standard / Low |
+| **Twitter / X** | `twitter_post_tweet`, `twitter_read_mentions` | Publish tweets, inspect user mentions | Standard / Medium |
+| **Telegram** | `telegram_send_message`, `telegram_get_updates` | Send bot messages, fetch updates | Standard / Low |
+| **WhatsApp** | `whatsapp_send_message`, `whatsapp_send_template` | Cloud API text and template messages | Standard / Medium |
+| **Meta Graph** | `instagram_post_publish`, `instagram_read_comments`, `instagram_reply_comment`, `facebook_post_feed`, `facebook_read_page_feed` | Instagram media containers, comments, Facebook page feeds | High (gated) |
+| **Google Workspace** | `calendar_list_events`, `calendar_find_free_slots`, `calendar_create_event`, `gmail_search_messages`, `gmail_read_thread`, `gmail_create_draft`, `gmail_send_message` | Calendar scheduling, busy/free slots, Gmail search, drafting, sending | High (gated) |
 
 ---
 
@@ -125,27 +118,24 @@ ClawBridge decouples agent intelligence from credentials using a Zero-Trust arch
 ### 1. Download or Build Static Binary
 
 #### Option A: One-Liner Install
-
 ```bash
 curl -sSL https://raw.githubusercontent.com/thilak15/ClawBridge/main/scripts/install.sh | bash
 ```
 
-Ensure `~/.local/bin` is in your `$PATH` if it is not already:
+Ensure `~/.local/bin` is in your `$PATH`:
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
 #### Option B: Direct Precompiled Binary Download
-
-Download static binaries directly from [GitHub Releases (v1.0.1)](https://github.com/thilak15/ClawBridge/releases/latest) for your target platform:
-- `clawbridge-darwin-arm64` (macOS Apple Silicon)
-- `clawbridge-darwin-amd64` (macOS Intel)
-- `clawbridge-linux-amd64` (Linux x86_64)
-- `clawbridge-linux-arm64` (Linux ARM64 / Raspberry Pi)
-- `clawbridge-windows-amd64.exe` (Windows x64)
+Download static binaries directly from [GitHub Releases (v1.0.1)](https://github.com/thilak15/ClawBridge/releases/latest):
+* `clawbridge-darwin-arm64` (macOS Apple Silicon)
+* `clawbridge-darwin-amd64` (macOS Intel)
+* `clawbridge-linux-amd64` (Linux x86_64)
+* `clawbridge-linux-arm64` (Linux ARM64 / Raspberry Pi)
+* `clawbridge-windows-amd64.exe` (Windows x64)
 
 #### Option C: Build from Source (Pure Go, Zero CGO)
-
 ```bash
 git clone https://github.com/thilak15/ClawBridge.git
 cd ClawBridge
@@ -153,110 +143,142 @@ make build
 ./bin/clawbridge --version
 ```
 
-### 2. First-Run Guided Setup
+---
 
-Simply run the binary without arguments:
+## Official Claws Integration (OpenClaw & NVIDIA NemoClaw)
 
+### Running Official OpenClaw (openclaw.ai)
+
+ClawBridge automatically configures OpenClaw's MCP server and launches the runtime:
+
+```bash
+# 1. Configure OpenClaw MCP integration (~/.openclaw/openclaw.json)
+clawbridge bridge openclaw
+
+# 2. Launch official OpenClaw runtime with ClawBridge MCP tools
+clawbridge run openclaw
+```
+
+If OpenClaw is not yet installed on your system, ClawBridge will guide you to install it:
+```bash
+npm install -g openclaw
+# or
+curl -fsSL https://openclaw.ai/install.sh | bash
+```
+
+### Running Official NVIDIA NemoClaw (NVIDIA/NemoClaw)
+
+ClawBridge generates NVIDIA OpenShell sandbox policies and NeMo Guardrail configurations:
+
+```bash
+# 1. Configure NVIDIA OpenShell sandbox policy (~/.nemoclaw/sandbox.yaml)
+clawbridge bridge nemoclaw
+
+# 2. Launch official NemoClaw / OpenShell sandbox
+clawbridge run nemoclaw
+```
+
+---
+
+## Interactive Command Reference
+
+### Universal Connector & Gateway Console
 ```bash
 clawbridge
 ```
 
-ClawBridge will automatically:
-1. Detect or prompt you to select your LLM Provider (Google Gemini, OpenAI, Anthropic Claude, or local Ollama). Supports both Google AI Studio auth keys (`AQ...`) and standard keys (`AIza...`).
-2. Offer to connect your first app integration (Slack, Jira, Discord, Twitter, or GitHub).
-3. Initialize built-in agents (`nemoclaw` and `openclaw`).
-4. Launch the interactive multi-agent console.
-
----
-
-## Command Reference
-
-### Interactive Multi-Agent Runner
-
-```bash
-# Run all configured agents concurrently
-clawbridge run --all
-
-# Run specific agents
-clawbridge run nemoclaw openclaw
-```
-
-Inside the interactive console:
+Inside the console:
 ```text
 clawbridge> help
 Available Commands:
-  Agent Instructions:
-    <agent_name>: <task>     - Send a direct instruction to an agent
-    broadcast: <task>        - Send an instruction to all running agents
+  Universal Connector & MCP Tools:
+    tools                    - List all active Model Context Protocol (MCP) tools
+    vault                    - Inspect encrypted credentials and token refresh state
+    connect [app]            - Connect platforms (Slack, Jira, GitHub, Google, Meta, etc.)
 
-  Management & Configuration:
-    connect [app]            - Connect platforms (Slack, Jira, etc.) or LLMs
-    config                   - Configure per-agent access permissions
-    agent create <name>      - Create and start a new autonomous agent dynamically
-    run <agent>              - Start an inactive agent
-    list                     - List all running agents
-    status                   - Show agent turn counts and active memory
+  Official Upstream Claws Bridge:
+    bridge openclaw          - Configure OpenClaw MCP integration (~/.openclaw/openclaw.json)
+    bridge nemoclaw          - Configure NVIDIA NemoClaw sandbox (~/.nemoclaw/sandbox.yaml)
+    run openclaw [args...]   - Launch official OpenClaw with ClawBridge MCP tools
+    run nemoclaw [args...]   - Launch official NVIDIA NemoClaw / OpenShell stack
+
+  Console Controls:
     clear                    - Clear terminal console screen
     help                     - Show this guidance message
     exit / quit              - Leave the console
-
-clawbridge> nemoclaw: Summarize unread messages in #general
-clawbridge> openclaw: Check open sprint issues in Jira
-clawbridge> broadcast: Prepare weekly synchronization report
-clawbridge> connect gemini
-clawbridge> agent create researcher
-clawbridge> config
 ```
 
-### Connector Wizard
-
-Connect platforms and LLM providers step-by-step with automatic encryption into the local vault:
-
+### Connector Setup Wizard
+Connect platforms step-by-step with automatic AES-256-GCM encryption into the local vault:
 ```bash
-# Interactive selection menu (Apps & LLM providers)
+# Interactive selection menu
 clawbridge connect
 
-# Direct application connectors
+# Direct platform connectors
 clawbridge connect slack
 clawbridge connect jira
+clawbridge connect github
 clawbridge connect discord
 clawbridge connect twitter
-clawbridge connect github
-
-# Direct LLM provider connectors
-clawbridge connect gemini     # Supports AQ... and AIza... keys
-clawbridge connect openai     # Supports sk-... keys
-clawbridge connect anthropic  # Supports sk-ant-... keys
+clawbridge connect telegram
+clawbridge connect whatsapp
+clawbridge connect google
+clawbridge connect meta
 ```
 
-### Permission Wizard
+### Agent Configuration & Editing
+Agent YAML files are located at:
+* Inside repository: `agents/<name>.yaml`
+* Global installation: `~/.clawbridge/agents/<name>.yaml`
 
-Inspect and adjust app permissions per agent:
-
+Manage them easily with CLI commands:
 ```bash
-clawbridge config
-```
-
-Lets you select an agent and choose:
-1. Full Access to All Apps (`*`)
-2. Granular Selection (toggle Slack, Jira, Twitter, Discord, GitHub individually)
-
-### Dynamic Agent Creation
-
-Create a new custom autonomous agent:
-
-```bash
+# Create a new agent configuration
 clawbridge agent create researcher
+
+# List all configured agents
+clawbridge agent list
+
+# Open and edit agent YAML directly in your $EDITOR
+clawbridge agent edit researcher
 ```
 
-Generates a configuration file in `agents/researcher.yaml` with universal permissions and registers the agent in the SQLite vault.
-
-### Model Context Protocol (MCP) Server
-
-Connect proprietary or external agents (e.g. Muse, Claude Desktop, Cursor) to ClawBridge:
-
+### Model Context Protocol (MCP) Stdio Server
+Expose ClawBridge as a standard MCP server for Claude Desktop, Cursor, or any external framework:
 ```bash
 clawbridge mcp
+```
+
+Add to your `claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "clawbridge": {
+      "command": "clawbridge",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+---
+
+## 24/7 Background Daemon
+
+ClawBridge runs 24/7 in the background to proactively refresh OAuth tokens, enforce cross-agent rate limits, and verify incoming webhooks.
+
+```bash
+# Install and start background OS service (launchd on macOS, systemd on Linux)
+clawbridge service install
+clawbridge service start
+
+# Inspect status and tail logs
+clawbridge service status
+clawbridge service logs
+
+# Stop and uninstall service
+clawbridge service stop
+clawbridge service uninstall
 ```
 
 Add to your `claude_desktop_config.json`:

@@ -15,6 +15,7 @@ import (
 
 	"clawbridge/pkg/agents"
 	"clawbridge/pkg/auth"
+	"clawbridge/pkg/bridge"
 	"clawbridge/pkg/daemon"
 	"clawbridge/pkg/dispatch"
 	"clawbridge/pkg/inbound"
@@ -203,6 +204,9 @@ func Execute(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 	case "config":
 		return runConfig(args[1:], in, out, errOut)
 
+	case "bridge":
+		return runBridgeSubcommand(args[1:], in, out, errOut)
+
 	case "agent":
 		return runAgentSubcommand(args[1:], in, out, errOut)
 
@@ -237,11 +241,16 @@ func printHelp(out io.Writer) {
 	fmt.Fprintln(out, "")
 	fmt.Fprintln(out, "Core Commands:")
 	fmt.Fprintln(out, "  clawbridge                       Run 30-second quickstart or launch console")
-	fmt.Fprintln(out, "  clawbridge run [--all | agents]  Run agents concurrently in interactive console")
-	fmt.Fprintln(out, "  clawbridge connect [app]         Connect Slack, Jira, Discord, Twitter, GitHub")
-	fmt.Fprintln(out, "  clawbridge config                Configure per-agent access permissions")
-	fmt.Fprintln(out, "  clawbridge agent create <name>   Create a new autonomous agent configuration")
+	fmt.Fprintln(out, "  clawbridge connect [app]         Connect Slack, Jira, GitHub, Discord, Twitter, Google, Meta")
 	fmt.Fprintln(out, "  clawbridge mcp                   Expose stdio Model Context Protocol (MCP) server")
+	fmt.Fprintln(out, "  clawbridge bridge openclaw       Configure official OpenClaw MCP integration (~/.openclaw)")
+	fmt.Fprintln(out, "  clawbridge bridge nemoclaw       Configure official NVIDIA NemoClaw sandbox (~/.nemoclaw)")
+	fmt.Fprintln(out, "  clawbridge run openclaw [args]   Launch official OpenClaw with ClawBridge MCP tools")
+	fmt.Fprintln(out, "  clawbridge run nemoclaw [args]   Launch official NVIDIA NemoClaw / OpenShell runtime")
+	fmt.Fprintln(out, "  clawbridge run [--all | agents]  Run agents in interactive console")
+	fmt.Fprintln(out, "  clawbridge agent create <name>   Create a new autonomous agent configuration")
+	fmt.Fprintln(out, "  clawbridge agent edit <name>     Edit an agent configuration in $EDITOR")
+	fmt.Fprintln(out, "  clawbridge config                Configure per-agent access permissions")
 	fmt.Fprintln(out, "")
 	fmt.Fprintln(out, "24/7 Daemon Service Commands:")
 	fmt.Fprintln(out, "  clawbridge service install       Install background OS service (launchd/systemd)")
@@ -391,6 +400,16 @@ func runDefaultOrQuickstart(in io.Reader, out io.Writer, errOut io.Writer) int {
 }
 
 func runAgents(agentNames []string, in io.Reader, out io.Writer, errOut io.Writer) int {
+	if len(agentNames) > 0 {
+		target := strings.ToLower(agentNames[0])
+		if target == "openclaw" || target == "--openclaw" {
+			return runOpenClaw(agentNames[1:], in, out, errOut)
+		}
+		if target == "nemoclaw" || target == "--nemoclaw" {
+			return runNemoClaw(agentNames[1:], in, out, errOut)
+		}
+	}
+
 	app, err := InitAppContext("")
 	if err != nil {
 		fmt.Fprintf(errOut, "Initialization error: %v\n", err)
@@ -399,6 +418,95 @@ func runAgents(agentNames []string, in io.Reader, out io.Writer, errOut io.Write
 	defer app.DBMgr.Close()
 
 	return runOrchestratorConsole(app, agentNames, in, out, errOut)
+}
+
+func runOpenClaw(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
+	app, err := InitAppContext("")
+	if err != nil {
+		fmt.Fprintf(errOut, "Initialization error: %v\n", err)
+		return 1
+	}
+	defer app.DBMgr.Close()
+
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	envVars := collectVaultEnv(app.Vault)
+	selfBin, _ := os.Executable()
+
+	if err := bridge.RunOpenClaw(ctx, "", selfBin, args, envVars, in, out, errOut); err != nil {
+		fmt.Fprintf(errOut, "OpenClaw runner error: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+func runNemoClaw(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
+	app, err := InitAppContext("")
+	if err != nil {
+		fmt.Fprintf(errOut, "Initialization error: %v\n", err)
+		return 1
+	}
+	defer app.DBMgr.Close()
+
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	envVars := collectVaultEnv(app.Vault)
+	selfBin, _ := os.Executable()
+
+	if err := bridge.RunNemoClaw(ctx, "", selfBin, args, envVars, in, out, errOut); err != nil {
+		fmt.Fprintf(errOut, "NemoClaw runner error: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+func collectVaultEnv(v *vault.CredentialVault) map[string]string {
+	env := make(map[string]string)
+	if v == nil {
+		return env
+	}
+	for _, provider := range []string{"gemini", "openai", "anthropic"} {
+		if cred, err := v.GetCredentialByChannel(provider); err == nil && cred != nil {
+			if k, ok := cred.Data["key"].(string); ok && k != "" {
+				env[strings.ToUpper(provider)+"_API_KEY"] = k
+			}
+		}
+	}
+	return env
+}
+
+func runBridgeSubcommand(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
+	if len(args) == 0 {
+		fmt.Fprintln(errOut, "Usage: clawbridge bridge <openclaw|nemoclaw>")
+		return 1
+	}
+	target := strings.ToLower(args[0])
+	selfBin, _ := os.Executable()
+	switch target {
+	case "openclaw":
+		cfgFile, err := bridge.ConfigureOpenClawBridge("", selfBin)
+		if err != nil {
+			fmt.Fprintf(errOut, "Failed to configure OpenClaw bridge: %v\n", err)
+			return 1
+		}
+		fmt.Fprintf(out, "Successfully configured OpenClaw MCP integration at '%s'.\n", cfgFile)
+		fmt.Fprintln(out, "Official OpenClaw can now access all ClawBridge connectors via MCP.")
+		return 0
+	case "nemoclaw":
+		policyFile, err := bridge.ConfigureNemoClawBridge("", selfBin)
+		if err != nil {
+			fmt.Fprintf(errOut, "Failed to configure NVIDIA NemoClaw bridge: %v\n", err)
+			return 1
+		}
+		fmt.Fprintf(out, "Successfully configured NVIDIA OpenShell sandbox policy at '%s'.\n", policyFile)
+		fmt.Fprintln(out, "Official NemoClaw can now access all ClawBridge connectors within its sandbox.")
+		return 0
+	default:
+		fmt.Fprintf(errOut, "Unknown bridge target: '%s'. Supported targets: 'openclaw', 'nemoclaw'.\n", target)
+		return 1
+	}
 }
 
 func runOrchestratorConsole(app *AppContext, agentNames []string, in io.Reader, out io.Writer, errOut io.Writer) int {
@@ -439,6 +547,7 @@ func runOrchestratorConsole(app *AppContext, agentNames []string, in io.Reader, 
 		Vault:        app.Vault,
 		Registry:     app.Registry,
 		AgentsDir:    app.AgentsDir,
+		Tools:        app.Tools,
 	})
 	orch.StopAll()
 	if err != nil {
@@ -485,14 +594,8 @@ func runConfig(args []string, in io.Reader, out io.Writer, errOut io.Writer) int
 }
 
 func runAgentSubcommand(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
-	if len(args) < 2 || strings.ToLower(args[0]) != "create" {
-		fmt.Fprintln(errOut, "Usage: clawbridge agent create <name>")
-		return 1
-	}
-
-	name := strings.TrimSpace(args[1])
-	if name == "" {
-		fmt.Fprintln(errOut, "Agent name cannot be empty.")
+	if len(args) == 0 {
+		fmt.Fprintln(errOut, "Usage: clawbridge agent <create|edit|list> [arguments]")
 		return 1
 	}
 
@@ -503,21 +606,86 @@ func runAgentSubcommand(args []string, in io.Reader, out io.Writer, errOut io.Wr
 	}
 	defer app.DBMgr.Close()
 
-	filePath, err := agents.CreateAgentYAML(app.AgentsDir, agents.AgentConfig{
-		Name:         name,
-		Description:  fmt.Sprintf("Autonomous agent '%s'", name),
-		SystemPrompt: fmt.Sprintf("You are %s, an autonomous agent equipped with ClawBridge tools.", name),
-		Model:        "gemini-3.8-flash",
-		Permissions:  []string{"*"},
-	})
-	if err != nil {
-		fmt.Fprintf(errOut, "Failed to create agent: %v\n", err)
+	sub := strings.ToLower(args[0])
+	switch sub {
+	case "create":
+		if len(args) < 2 {
+			fmt.Fprintln(errOut, "Usage: clawbridge agent create <name>")
+			return 1
+		}
+		name := strings.TrimSpace(args[1])
+		if name == "" {
+			fmt.Fprintln(errOut, "Agent name cannot be empty.")
+			return 1
+		}
+		filePath, err := agents.CreateAgentYAML(app.AgentsDir, agents.AgentConfig{
+			Name:         name,
+			Description:  fmt.Sprintf("Autonomous agent '%s'", name),
+			SystemPrompt: fmt.Sprintf("You are %s, an autonomous agent equipped with ClawBridge tools.", name),
+			Model:        "gemini-3.8-flash",
+			Permissions:  []string{"*"},
+		})
+		if err != nil {
+			fmt.Fprintf(errOut, "Failed to create agent: %v\n", err)
+			return 1
+		}
+		_, _, _ = app.Registry.RegisterAgent(name, []string{"*"})
+		fmt.Fprintf(out, "Created agent configuration at '%s'. Full access permissions granted (*).\n", filePath)
+		fmt.Fprintf(out, "Edit anytime with: clawbridge agent edit %s\n", name)
+		return 0
+
+	case "edit":
+		if len(args) < 2 {
+			fmt.Fprintln(errOut, "Usage: clawbridge agent edit <name>")
+			return 1
+		}
+		name := strings.TrimSpace(args[1])
+		filePath := filepath.Join(app.AgentsDir, fmt.Sprintf("%s.yaml", name))
+		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			fmt.Fprintf(errOut, "Agent configuration file '%s' does not exist.\n", filePath)
+			return 1
+		}
+		editor := os.Getenv("EDITOR")
+		if editor == "" {
+			for _, e := range []string{"code", "nano", "vim", "vi"} {
+				if p, err := exec.LookPath(e); err == nil {
+					editor = p
+					break
+				}
+			}
+		}
+		if editor == "" {
+			fmt.Fprintf(out, "Agent configuration file located at:\n  %s\n", filePath)
+			return 0
+		}
+		cmd := exec.Command(editor, filePath)
+		cmd.Stdin = in
+		cmd.Stdout = out
+		cmd.Stderr = errOut
+		if err := cmd.Run(); err != nil {
+			fmt.Fprintf(errOut, "Editor error: %v\n", err)
+			return 1
+		}
+		return 0
+
+	case "list":
+		entries, err := os.ReadDir(app.AgentsDir)
+		if err != nil {
+			fmt.Fprintf(errOut, "Failed to read agents directory: %v\n", err)
+			return 1
+		}
+		fmt.Fprintf(out, "Configured agents in '%s':\n", app.AgentsDir)
+		for _, e := range entries {
+			if !e.IsDir() && (strings.HasSuffix(e.Name(), ".yaml") || strings.HasSuffix(e.Name(), ".yml")) {
+				fmt.Fprintf(out, "  - %s\n", strings.TrimSuffix(strings.TrimSuffix(e.Name(), ".yaml"), ".yml"))
+			}
+		}
+		return 0
+
+	default:
+		fmt.Fprintf(errOut, "Unknown agent action: '%s'. Use 'create', 'edit', or 'list'.\n", sub)
 		return 1
 	}
-
-	_, _, _ = app.Registry.RegisterAgent(name, []string{"*"})
-	fmt.Fprintf(out, "Created agent configuration at '%s'. Full access permissions granted (*).\n", filePath)
-	return 0
 }
 
 func runMCPServer(in io.Reader, out io.Writer, errOut io.Writer) int {
