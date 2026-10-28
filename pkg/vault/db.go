@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -85,6 +86,14 @@ func (m *DatabaseManager) Initialize() error {
 		updated_at TEXT NOT NULL
 	);
 	CREATE INDEX IF NOT EXISTS idx_agents_name ON agents(name);
+
+	CREATE TABLE IF NOT EXISTS agent_memories (
+		agent_name TEXT PRIMARY KEY,
+		summary TEXT NOT NULL,
+		turn_count INTEGER NOT NULL DEFAULT 0,
+		updated_at TEXT NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS idx_agent_memories_agent ON agent_memories(agent_name);
 	`
 
 	if _, err := m.db.Exec(schema); err != nil {
@@ -100,6 +109,36 @@ func (m *DatabaseManager) CheckpointWAL() error {
 		return fmt.Errorf("failed to checkpoint WAL: %w", err)
 	}
 	return nil
+}
+
+// SaveAgentMemory stores or updates the rolling summary for an agent in SQLite WAL.
+func (m *DatabaseManager) SaveAgentMemory(agentName, summary string, turnCount int) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	query := `
+	INSERT INTO agent_memories (agent_name, summary, turn_count, updated_at)
+	VALUES (?, ?, ?, ?)
+	ON CONFLICT(agent_name) DO UPDATE SET
+		summary = excluded.summary,
+		turn_count = excluded.turn_count,
+		updated_at = excluded.updated_at;
+	`
+	_, err := m.db.Exec(query, agentName, summary, turnCount, now)
+	return err
+}
+
+// GetAgentMemory retrieves the rolling summary and turn count for an agent.
+func (m *DatabaseManager) GetAgentMemory(agentName string) (string, int, error) {
+	query := `SELECT summary, turn_count FROM agent_memories WHERE agent_name = ?;`
+	var summary string
+	var turnCount int
+	err := m.db.QueryRow(query, agentName).Scan(&summary, &turnCount)
+	if err == sql.ErrNoRows {
+		return "", 0, nil
+	}
+	if err != nil {
+		return "", 0, err
+	}
+	return summary, turnCount, nil
 }
 
 // DB returns the underlying sql.DB instance.

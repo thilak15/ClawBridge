@@ -32,6 +32,11 @@ func NewAgentRegistry(dbMgr *vault.DatabaseManager) *AgentRegistry {
 	return &AgentRegistry{dbMgr: dbMgr}
 }
 
+// DatabaseManager returns the underlying vault DatabaseManager.
+func (r *AgentRegistry) DatabaseManager() *vault.DatabaseManager {
+	return r.dbMgr
+}
+
 // RegisterAgent registers a new agent and returns the record and plaintext bearer token.
 func (r *AgentRegistry) RegisterAgent(name string, rules []string) (*AgentRecord, string, error) {
 	if len(rules) == 0 {
