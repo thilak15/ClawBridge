@@ -1,5 +1,10 @@
 # ClawBridge
 
+[![Release](https://img.shields.io/github/v/release/thilak15/ClawBridge)](https://github.com/thilak15/ClawBridge/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Go Version](https://img.shields.io/badge/Go-1.22%2B-00ADD8.svg)](https://go.dev)
+[![Zero CGO](https://img.shields.io/badge/CGO-disabled-brightgreen.svg)](https://golang.org)
+
 Zero-Trust Agent Egress Gateway, Credential Vault, and 24/7 Multi-Agent Daemon for Autonomous AI.
 
 ---
@@ -125,7 +130,21 @@ ClawBridge decouples agent intelligence from credentials using a Zero-Trust arch
 curl -sSL https://raw.githubusercontent.com/thilak15/ClawBridge/main/scripts/install.sh | bash
 ```
 
-#### Option B: Build from Source (Pure Go, Zero CGO)
+Ensure `~/.local/bin` is in your `$PATH` if it is not already:
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+#### Option B: Direct Precompiled Binary Download
+
+Download static binaries directly from [GitHub Releases (v1.0.0)](https://github.com/thilak15/ClawBridge/releases/latest) for your target platform:
+- `clawbridge-darwin-arm64` (macOS Apple Silicon)
+- `clawbridge-darwin-amd64` (macOS Intel)
+- `clawbridge-linux-amd64` (Linux x86_64)
+- `clawbridge-linux-arm64` (Linux ARM64 / Raspberry Pi)
+- `clawbridge-windows-amd64.exe` (Windows x64)
+
+#### Option C: Build from Source (Pure Go, Zero CGO)
 
 ```bash
 git clone https://github.com/thilak15/ClawBridge.git
