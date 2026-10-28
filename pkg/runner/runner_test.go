@@ -390,3 +390,176 @@ func TestOrchestrator_EvaluateAndRepairLoop(t *testing.T) {
 
 	orch.StopAll()
 }
+
+func TestConsole_InConsoleManagementCommands(t *testing.T) {
+	reg, agentsDir, cleanup := setupTestEnvironment(t)
+	defer cleanup()
+
+	key, _ := vault.GenerateKey()
+	cipher, _ := vault.NewEnvelopeCipher(key)
+	credVault := vault.NewCredentialVault(reg.DatabaseManager(), cipher)
+
+	outBuf := &bytes.Buffer{}
+	orch := runner.NewOrchestrator(agentsDir, reg, nil, nil, nil, outBuf)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	_, _ = orch.StartAll(ctx)
+
+	script := `clear
+clawbridge list
+agent create workerbot
+workerbot: Process incoming data
+connect discord
+test-discord-token
+config
+1
+1
+exit
+`
+	in := strings.NewReader(script)
+	consoleOut := &bytes.Buffer{}
+
+	err := runner.RunConsoleWithConfig(ctx, runner.ConsoleConfig{
+		In:           in,
+		Out:          consoleOut,
+		Orchestrator: orch,
+		Vault:        credVault,
+		Registry:     reg,
+		AgentsDir:    agentsDir,
+	})
+	if err != nil {
+		t.Fatalf("unexpected console error: %v", err)
+	}
+
+	output := consoleOut.String()
+	if !strings.Contains(output, "Running agents (2):") {
+		t.Errorf("expected listing with clawbridge prefix stripped, got:\n%s", output)
+	}
+	if !strings.Contains(output, "Created agent 'workerbot' configuration") {
+		t.Errorf("expected agent create confirmation, got:\n%s", output)
+	}
+	if !strings.Contains(output, "Agent 'workerbot' is now running and ready for instructions") {
+		t.Errorf("expected agent dynamically running confirmation, got:\n%s", output)
+	}
+	if !strings.Contains(output, "Task dispatched to 'workerbot'") {
+		t.Errorf("expected task dispatched to newly created agent, got:\n%s", output)
+	}
+	if !strings.Contains(output, "Successfully encrypted and stored Discord credentials in vault") {
+		t.Errorf("expected in-console connect success, got:\n%s", output)
+	}
+	if !strings.Contains(output, "Registered Agents:") {
+		t.Errorf("expected in-console config wizard prompt, got:\n%s", output)
+	}
+
+	// Verify agent actually exists in running list
+	if !orch.IsRunning("workerbot") {
+		t.Errorf("expected workerbot to be actively running in orchestrator")
+	}
+
+	// Verify credential was stored in vault
+	cred, err := credVault.GetCredentialByChannel("discord")
+	if err != nil || cred == nil {
+		t.Fatalf("expected discord cred in vault, err: %v", err)
+	}
+	if cred.Data["token"] != "test-discord-token" {
+		t.Errorf("unexpected discord token: %v", cred.Data)
+	}
+}
+
+func TestOrchestrator_GuardrailApprovalGating(t *testing.T) {
+	reg, agentsDir, cleanup := setupTestEnvironment(t)
+	defer cleanup()
+
+	slackCalled := false
+	slackServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		slackCalled = true
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	}))
+	defer slackServer.Close()
+
+	llmServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+
+		argsJSON, _ := json.Marshal(map[string]any{
+			"channel_id": "C_TEST",
+			"text":       "High risk announcement",
+			"url":        slackServer.URL,
+		})
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{
+					"message": map[string]any{
+						"role": "assistant",
+						"tool_calls": []map[string]any{
+							{
+								"id":   "call_hr_01",
+								"type": "function",
+								"function": map[string]any{
+									"name":      "slack_post_message",
+									"arguments": string(argsJSON),
+								},
+							},
+						},
+					},
+				},
+			},
+		})
+	}))
+	defer llmServer.Close()
+
+	llmClient := llm.NewClient(llm.ClientConfig{
+		Provider:   llm.ProviderOpenAI,
+		APIKey:     "test-key",
+		BaseURL:    llmServer.URL,
+		HTTPClient: llmServer.Client(),
+	})
+
+	key, _ := vault.GenerateKey()
+	cipher, _ := vault.NewEnvelopeCipher(key)
+	credVault := vault.NewCredentialVault(reg.DatabaseManager(), cipher)
+	limiter := dispatch.NewTokenBucketLimiter(nil)
+	dispatcher := dispatch.NewEgressDispatcher(credVault, limiter, slackServer.Client())
+	tools := mcp.NewTools(dispatcher, nil, nil)
+
+	outBuf := &bytes.Buffer{}
+	orch := runner.NewOrchestrator(agentsDir, reg, llmClient, tools, nil, outBuf)
+
+	// Explicitly assign RejectAllApprovalGate to simulate operator declining high-risk action
+	orch.SetApprovalGate(&auth.RejectAllApprovalGate{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	_ = orch.StartAgent(ctx, "nemoclaw")
+	_ = orch.DispatchTask("nemoclaw", "Post high risk announcement")
+
+	time.Sleep(100 * time.Millisecond)
+
+	if slackCalled {
+		t.Errorf("slack tool should have been blocked by guardrail approval gate")
+	}
+
+	mem := orch.GetAgentMemory("nemoclaw")
+	if mem == nil {
+		t.Fatal("expected memory for agent")
+	}
+
+	msgs := mem.GetMessages()
+	foundBlocked := false
+	for _, m := range msgs {
+		if strings.Contains(m.Content, `"status":"blocked"`) && strings.Contains(m.Content, `"risk":"high"`) {
+			foundBlocked = true
+			break
+		}
+	}
+
+	if !foundBlocked {
+		t.Errorf("expected blocked tool message in agent conversation, got: %+v", msgs)
+	}
+
+	orch.StopAll()
+}

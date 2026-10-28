@@ -94,6 +94,19 @@ func (m *DatabaseManager) Initialize() error {
 		updated_at TEXT NOT NULL
 	);
 	CREATE INDEX IF NOT EXISTS idx_agent_memories_agent ON agent_memories(agent_name);
+
+	CREATE TABLE IF NOT EXISTS pending_approvals (
+		id TEXT PRIMARY KEY,
+		agent_name TEXT NOT NULL,
+		tool_name TEXT NOT NULL,
+		channel TEXT NOT NULL,
+		action TEXT NOT NULL,
+		arguments_json TEXT NOT NULL,
+		status TEXT NOT NULL,
+		created_at TEXT NOT NULL,
+		resolved_at TEXT
+	);
+	CREATE INDEX IF NOT EXISTS idx_pending_approvals_status ON pending_approvals(status);
 	`
 
 	if _, err := m.db.Exec(schema); err != nil {
@@ -139,6 +152,117 @@ func (m *DatabaseManager) GetAgentMemory(agentName string) (string, int, error) 
 		return "", 0, err
 	}
 	return summary, turnCount, nil
+}
+
+// PendingApprovalRecord represents an action awaiting human-in-the-loop approval.
+type PendingApprovalRecord struct {
+	ID            string    `json:"id"`
+	AgentName     string    `json:"agent_name"`
+	ToolName      string    `json:"tool_name"`
+	Channel       string    `json:"channel"`
+	Action        string    `json:"action"`
+	ArgumentsJSON string    `json:"arguments_json"`
+	Status        string    `json:"status"` // "pending", "approved", "rejected"
+	CreatedAt     time.Time `json:"created_at"`
+	ResolvedAt    time.Time `json:"resolved_at,omitempty"`
+}
+
+// CreatePendingApproval records a new high-risk action requiring approval.
+func (m *DatabaseManager) CreatePendingApproval(id, agentName, toolName, channel, action, argsJSON string) (*PendingApprovalRecord, error) {
+	now := time.Now().UTC()
+	nowStr := now.Format(time.RFC3339)
+
+	query := `
+	INSERT INTO pending_approvals (id, agent_name, tool_name, channel, action, arguments_json, status, created_at)
+	VALUES (?, ?, ?, ?, ?, ?, 'pending', ?);
+	`
+	_, err := m.db.Exec(query, id, agentName, toolName, channel, action, argsJSON, nowStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create pending approval: %w", err)
+	}
+
+	return &PendingApprovalRecord{
+		ID:            id,
+		AgentName:     agentName,
+		ToolName:      toolName,
+		Channel:       channel,
+		Action:        action,
+		ArgumentsJSON: argsJSON,
+		Status:        "pending",
+		CreatedAt:     now,
+	}, nil
+}
+
+// ListPendingApprovals returns records matching the given status (or all if status is "").
+func (m *DatabaseManager) ListPendingApprovals(status string) ([]*PendingApprovalRecord, error) {
+	var query string
+	var args []any
+	if status != "" {
+		query = `SELECT id, agent_name, tool_name, channel, action, arguments_json, status, created_at, resolved_at FROM pending_approvals WHERE status = ? ORDER BY created_at DESC;`
+		args = append(args, status)
+	} else {
+		query = `SELECT id, agent_name, tool_name, channel, action, arguments_json, status, created_at, resolved_at FROM pending_approvals ORDER BY created_at DESC;`
+	}
+
+	rows, err := m.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []*PendingApprovalRecord
+	for rows.Next() {
+		var r PendingApprovalRecord
+		var createdStr string
+		var resolvedStr sql.NullString
+		if err := rows.Scan(&r.ID, &r.AgentName, &r.ToolName, &r.Channel, &r.Action, &r.ArgumentsJSON, &r.Status, &createdStr, &resolvedStr); err != nil {
+			return nil, err
+		}
+		r.CreatedAt, _ = time.Parse(time.RFC3339, createdStr)
+		if resolvedStr.Valid && resolvedStr.String != "" {
+			r.ResolvedAt, _ = time.Parse(time.RFC3339, resolvedStr.String)
+		}
+		list = append(list, &r)
+	}
+	return list, nil
+}
+
+// GetPendingApproval retrieves a specific approval record by ID.
+func (m *DatabaseManager) GetPendingApproval(id string) (*PendingApprovalRecord, error) {
+	query := `SELECT id, agent_name, tool_name, channel, action, arguments_json, status, created_at, resolved_at FROM pending_approvals WHERE id = ?;`
+	var r PendingApprovalRecord
+	var createdStr string
+	var resolvedStr sql.NullString
+	err := m.db.QueryRow(query, id).Scan(&r.ID, &r.AgentName, &r.ToolName, &r.Channel, &r.Action, &r.ArgumentsJSON, &r.Status, &createdStr, &resolvedStr)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("approval '%s' not found", id)
+		}
+		return nil, err
+	}
+	r.CreatedAt, _ = time.Parse(time.RFC3339, createdStr)
+	if resolvedStr.Valid && resolvedStr.String != "" {
+		r.ResolvedAt, _ = time.Parse(time.RFC3339, resolvedStr.String)
+	}
+	return &r, nil
+}
+
+// ResolveApproval updates the status of an approval record (e.g. "approved" or "rejected").
+func (m *DatabaseManager) ResolveApproval(id, status string) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	query := `UPDATE pending_approvals SET status = ?, resolved_at = ? WHERE id = ?;`
+	res, err := m.db.Exec(query, status, now, id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("approval '%s' not found", id)
+	}
+	return nil
 }
 
 // DB returns the underlying sql.DB instance.

@@ -185,16 +185,27 @@ Inside the interactive console:
 ```text
 clawbridge> help
 Available Commands:
-  <agent_name>: <task>     - Send a direct instruction to an agent
-  broadcast: <task>        - Send an instruction to all running agents
-  list                     - List all running agents
-  status                   - Show agent turn counts and active memory
-  help                     - Show this guidance message
-  exit / quit              - Leave the console
+  Agent Instructions:
+    <agent_name>: <task>     - Send a direct instruction to an agent
+    broadcast: <task>        - Send an instruction to all running agents
+
+  Management & Configuration:
+    connect [app]            - Connect platforms (Slack, Jira, etc.) or LLMs
+    config                   - Configure per-agent access permissions
+    agent create <name>      - Create and start a new autonomous agent dynamically
+    run <agent>              - Start an inactive agent
+    list                     - List all running agents
+    status                   - Show agent turn counts and active memory
+    clear                    - Clear terminal console screen
+    help                     - Show this guidance message
+    exit / quit              - Leave the console
 
 clawbridge> nemoclaw: Summarize unread messages in #general
 clawbridge> openclaw: Check open sprint issues in Jira
 clawbridge> broadcast: Prepare weekly synchronization report
+clawbridge> connect gemini
+clawbridge> agent create researcher
+clawbridge> config
 ```
 
 ### Connector Wizard

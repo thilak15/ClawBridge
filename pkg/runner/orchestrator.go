@@ -40,14 +40,15 @@ type RunningAgent struct {
 
 // Orchestrator coordinates concurrent multi-agent goroutines, tool execution, and logs.
 type Orchestrator struct {
-	mu          sync.RWMutex
-	agents      map[string]*RunningAgent
-	agentDir    string
-	registry    *auth.AgentRegistry
-	llmClient   *llm.Client
-	tools       *mcp.Tools
-	out         io.Writer
-	broadcaster *inbound.EventBroadcaster
+	mu           sync.RWMutex
+	agents       map[string]*RunningAgent
+	agentDir     string
+	registry     *auth.AgentRegistry
+	llmClient    *llm.Client
+	tools        *mcp.Tools
+	out          io.Writer
+	broadcaster  *inbound.EventBroadcaster
+	approvalGate auth.ApprovalGate
 }
 
 // NewOrchestrator creates a new multi-agent orchestrator.
@@ -63,14 +64,22 @@ func NewOrchestrator(
 		out = os.Stdout
 	}
 	return &Orchestrator{
-		agents:      make(map[string]*RunningAgent),
-		agentDir:    agentDir,
-		registry:    registry,
-		llmClient:   llmClient,
-		tools:       tools,
-		broadcaster: broadcaster,
-		out:         out,
+		agents:       make(map[string]*RunningAgent),
+		agentDir:     agentDir,
+		registry:     registry,
+		llmClient:    llmClient,
+		tools:        tools,
+		broadcaster:  broadcaster,
+		out:          out,
+		approvalGate: &auth.AutoApprovalGate{},
 	}
+}
+
+// SetApprovalGate assigns a guardrail approval gate for high-risk actions.
+func (o *Orchestrator) SetApprovalGate(gate auth.ApprovalGate) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.approvalGate = gate
 }
 
 // Log outputs a formatted, color-coded, timestamped log line.
@@ -399,6 +408,36 @@ func (o *Orchestrator) executeTask(ctx context.Context, agt *RunningAgent, task 
 				agt.Memory.AddMessage(toolMsg)
 				req.Messages = append(req.Messages, toolMsg)
 				continue
+			}
+
+			// Guardrail evaluation for high-risk actions
+			risk := auth.ClassifyActionRisk(call.Name)
+			if risk == auth.RiskHigh && o.approvalGate != nil {
+				channel, action := toolNameToChannelAction(call.Name)
+				apprReq := auth.ApprovalRequest{
+					ID:        auth.GenerateApprovalID(),
+					AgentName: agt.Config.Name,
+					ToolName:  call.Name,
+					Channel:   channel,
+					Action:    action,
+					Arguments: call.Arguments,
+				}
+				approved, apprErr := o.approvalGate.RequestApproval(ctx, apprReq)
+				if apprErr != nil || !approved {
+					reason := "Action rejected by operator"
+					if apprErr != nil {
+						reason = apprErr.Error()
+					}
+					o.Log(ColorRed, agt.Config.Name, fmt.Sprintf("[Guardrail Blocked] High-risk action '%s' blocked: %s", call.Name, reason))
+					toolMsg := llm.Message{
+						Role:       "tool",
+						ToolCallID: call.ID,
+						Content:    fmt.Sprintf(`{"status":"blocked","risk":"high","reason":"%s"}`, reason),
+					}
+					agt.Memory.AddMessage(toolMsg)
+					req.Messages = append(req.Messages, toolMsg)
+					continue
+				}
 			}
 
 			o.Log(agt.ColorCode, agt.Config.Name, fmt.Sprintf("Calling tool '%s' with args %v", call.Name, call.Arguments))

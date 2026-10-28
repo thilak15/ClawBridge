@@ -74,6 +74,15 @@ func RunConsoleWithConfig(ctx context.Context, cfg ConsoleConfig) error {
 
 	// 2. Interactive Terminal REPL loop
 	scanner := bufio.NewScanner(in)
+	eof := false
+	prompt := func(msg string) string {
+		fmt.Fprint(out, msg)
+		if !scanner.Scan() {
+			eof = true
+			return ""
+		}
+		return strings.TrimSpace(scanner.Text())
+	}
 	fmt.Fprintln(out, "ClawBridge Multi-Agent Console (Type 'help' for commands, 'exit' to quit)")
 
 	for {
@@ -83,12 +92,10 @@ func RunConsoleWithConfig(ctx context.Context, cfg ConsoleConfig) error {
 		default:
 		}
 
-		fmt.Fprint(out, "clawbridge> ")
-		if !scanner.Scan() {
+		rawLine := prompt("clawbridge> ")
+		if eof {
 			break
 		}
-
-		rawLine := strings.TrimSpace(scanner.Text())
 		if rawLine == "" {
 			continue
 		}
@@ -159,7 +166,7 @@ func RunConsoleWithConfig(ctx context.Context, cfg ConsoleConfig) error {
 			if len(parts) > 1 {
 				targetApp = parts[1]
 			}
-			if err := wizard.RunConnectWizard(in, out, cfg.Vault, targetApp); err != nil {
+			if err := wizard.RunConnectWizardWithPrompt(prompt, out, cfg.Vault, targetApp); err != nil {
 				fmt.Fprintf(out, "Connect wizard error: %v\n", err)
 			}
 
@@ -168,7 +175,7 @@ func RunConsoleWithConfig(ctx context.Context, cfg ConsoleConfig) error {
 				fmt.Fprintln(out, "Agent configuration not available in this session.")
 				continue
 			}
-			if err := wizard.RunConfigWizard(in, out, cfg.Registry, cfg.AgentsDir); err != nil {
+			if err := wizard.RunConfigWizardWithPrompt(prompt, out, cfg.Registry, cfg.AgentsDir); err != nil {
 				fmt.Fprintf(out, "Config wizard error: %v\n", err)
 			}
 

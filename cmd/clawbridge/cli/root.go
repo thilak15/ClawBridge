@@ -215,6 +215,15 @@ func Execute(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 	case "start":
 		return runStartDaemon(args[1:], in, out, errOut)
 
+	case "approvals":
+		return runApprovalsSubcommand(args[1:], in, out, errOut)
+
+	case "approve":
+		return runResolveApproval(args[1:], "approved", out, errOut)
+
+	case "reject":
+		return runResolveApproval(args[1:], "rejected", out, errOut)
+
 	default:
 		fmt.Fprintf(errOut, "Unknown command: '%s'. Type 'clawbridge help' for usage.\n", cmd)
 		return 1
@@ -421,6 +430,7 @@ func runOrchestratorConsole(app *AppContext, agentNames []string, in io.Reader, 
 	}
 
 	// Launch console REPL
+	orch.SetApprovalGate(auth.NewConsoleApprovalGate(in, out))
 	err := runner.RunConsoleWithConfig(ctx, runner.ConsoleConfig{
 		In:           in,
 		Out:          out,
@@ -654,6 +664,7 @@ func runStartDaemon(args []string, in io.Reader, out io.Writer, errOut io.Writer
 	defer cancel()
 
 	orch := runner.NewOrchestrator(app.AgentsDir, app.Registry, app.LLMClient, app.Tools, app.Broadcaster, out)
+	orch.SetApprovalGate(auth.NewDatabaseApprovalGate(app.DBMgr))
 	started, err := orch.StartAll(ctx)
 	if err != nil {
 		fmt.Fprintf(errOut, "Failed to start agents: %v\n", err)
@@ -665,5 +676,64 @@ func runStartDaemon(args []string, in io.Reader, out io.Writer, errOut io.Writer
 	<-ctx.Done()
 	orch.StopAll()
 	fmt.Fprintln(out, "ClawBridge daemon stopped gracefully.")
+	return 0
+}
+
+func runApprovalsSubcommand(args []string, in io.Reader, out, errOut io.Writer) int {
+	app, err := InitAppContext("")
+	if err != nil {
+		fmt.Fprintf(errOut, "Failed to initialize: %v\n", err)
+		return 1
+	}
+	defer app.DBMgr.Close()
+
+	status := "pending"
+	if len(args) > 0 && args[0] != "" {
+		status = args[0]
+		if status == "all" {
+			status = ""
+		}
+	}
+
+	list, err := app.DBMgr.ListPendingApprovals(status)
+	if err != nil {
+		fmt.Fprintf(errOut, "Failed to list approvals: %v\n", err)
+		return 1
+	}
+
+	if len(list) == 0 {
+		fmt.Fprintf(out, "No approvals found with status '%s'.\n", status)
+		return 0
+	}
+
+	fmt.Fprintf(out, "Approvals (%d):\n", len(list))
+	for _, a := range list {
+		fmt.Fprintf(out, "  ID: %s | Agent: %s | Tool: %s | Status: %s | Created: %s\n",
+			a.ID, a.AgentName, a.ToolName, a.Status, a.CreatedAt.Format("2006-01-02 15:04:05"))
+		fmt.Fprintf(out, "     Payload: %s\n", a.ArgumentsJSON)
+	}
+	return 0
+}
+
+func runResolveApproval(args []string, status string, out, errOut io.Writer) int {
+	if len(args) < 1 {
+		fmt.Fprintf(errOut, "Usage: clawbridge %s <approval_id>\n", status[:len(status)-1])
+		return 1
+	}
+	approvalID := args[0]
+
+	app, err := InitAppContext("")
+	if err != nil {
+		fmt.Fprintf(errOut, "Failed to initialize: %v\n", err)
+		return 1
+	}
+	defer app.DBMgr.Close()
+
+	if err := app.DBMgr.ResolveApproval(approvalID, status); err != nil {
+		fmt.Fprintf(errOut, "Failed to update approval '%s': %v\n", approvalID, err)
+		return 1
+	}
+
+	fmt.Fprintf(out, "Approval '%s' has been %s.\n", approvalID, status)
 	return 0
 }

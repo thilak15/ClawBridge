@@ -12,10 +12,6 @@ import (
 
 // RunConnectWizard interactively prompts for app credentials and saves them encrypted into the vault.
 func RunConnectWizard(in io.Reader, out io.Writer, v *vault.CredentialVault, targetApp string) error {
-	if v == nil {
-		return fmt.Errorf("vault cannot be nil")
-	}
-
 	scanner := bufio.NewScanner(in)
 	prompt := func(msg string) string {
 		fmt.Fprint(out, msg)
@@ -23,6 +19,14 @@ func RunConnectWizard(in io.Reader, out io.Writer, v *vault.CredentialVault, tar
 			return ""
 		}
 		return strings.TrimSpace(scanner.Text())
+	}
+	return RunConnectWizardWithPrompt(prompt, out, v, targetApp)
+}
+
+// RunConnectWizardWithPrompt runs the connect wizard using a provided prompt function.
+func RunConnectWizardWithPrompt(prompt func(msg string) string, out io.Writer, v *vault.CredentialVault, targetApp string) error {
+	if v == nil {
+		return fmt.Errorf("vault cannot be nil")
 	}
 
 	app := strings.ToLower(strings.TrimSpace(targetApp))
