@@ -13,10 +13,6 @@ import (
 
 // RunConfigWizard interactively configures agent permissions in SQLite and updates agents/*.yaml.
 func RunConfigWizard(in io.Reader, out io.Writer, registry *auth.AgentRegistry, agentsDir string) error {
-	if registry == nil {
-		return fmt.Errorf("agent registry cannot be nil")
-	}
-
 	scanner := bufio.NewScanner(in)
 	prompt := func(msg string) string {
 		fmt.Fprint(out, msg)
@@ -24,6 +20,14 @@ func RunConfigWizard(in io.Reader, out io.Writer, registry *auth.AgentRegistry, 
 			return ""
 		}
 		return strings.TrimSpace(scanner.Text())
+	}
+	return RunConfigWizardWithPrompt(prompt, out, registry, agentsDir)
+}
+
+// RunConfigWizardWithPrompt runs the config wizard using a provided prompt function.
+func RunConfigWizardWithPrompt(prompt func(msg string) string, out io.Writer, registry *auth.AgentRegistry, agentsDir string) error {
+	if registry == nil {
+		return fmt.Errorf("agent registry cannot be nil")
 	}
 
 	agentList, err := registry.ListAgents()
