@@ -161,7 +161,7 @@ func ensureBuiltinAgents(dir string) {
 			Name:         "nemoclaw",
 			Description:  "General-purpose autonomous agent with universal tool access",
 			SystemPrompt: "You are NemoClaw, an autonomous multi-platform agent equipped with ClawBridge tools.",
-			Model:        "gemini-1.5-flash",
+			Model:        "gemini-3.8-flash",
 			Permissions:  []string{"*"},
 		})
 	}
@@ -172,7 +172,7 @@ func ensureBuiltinAgents(dir string) {
 			Name:         "openclaw",
 			Description:  "Autonomous agent with universal access for engineering tasks",
 			SystemPrompt: "You are OpenClaw, an autonomous multi-platform agent equipped with ClawBridge tools.",
-			Model:        "gemini-1.5-flash",
+			Model:        "gemini-3.8-flash",
 			Permissions:  []string{"*"},
 		})
 	}
@@ -507,7 +507,7 @@ func runAgentSubcommand(args []string, in io.Reader, out io.Writer, errOut io.Wr
 		Name:         name,
 		Description:  fmt.Sprintf("Autonomous agent '%s'", name),
 		SystemPrompt: fmt.Sprintf("You are %s, an autonomous agent equipped with ClawBridge tools.", name),
-		Model:        "gemini-1.5-flash",
+		Model:        "gemini-3.8-flash",
 		Permissions:  []string{"*"},
 	})
 	if err != nil {

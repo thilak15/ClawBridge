@@ -156,6 +156,75 @@ func (t *Tools) ListTools() []ToolDefinition {
 				"required": []string{"to", "template_name"},
 			},
 		},
+		{
+			Name:        "instagram_post_publish",
+			Description: "Create and publish a photo post on an Instagram Professional account via Meta Graph API.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"image_url":     map[string]any{"type": "string", "description": "Public URL of the image container to publish"},
+					"caption":       map[string]any{"type": "string", "description": "Post caption with hashtags"},
+					"ig_user_id":    map[string]any{"type": "string", "description": "Instagram User ID (default: me)"},
+					"token_id":      map[string]any{"type": "string", "description": "Optional OAuth token ID in Vault"},
+					"credential_id": map[string]any{"type": "string", "description": "Optional Meta credential ID in Vault"},
+				},
+				"required": []string{"image_url"},
+			},
+		},
+		{
+			Name:        "instagram_read_comments",
+			Description: "Retrieve recent comments on an Instagram media post via Meta Graph API.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"media_id":      map[string]any{"type": "string", "description": "The Instagram media ID"},
+					"token_id":      map[string]any{"type": "string", "description": "Optional OAuth token ID in Vault"},
+					"credential_id": map[string]any{"type": "string", "description": "Optional Meta credential ID in Vault"},
+				},
+				"required": []string{"media_id"},
+			},
+		},
+		{
+			Name:        "instagram_reply_comment",
+			Description: "Post a reply to a user comment on Instagram via Meta Graph API.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"comment_id":    map[string]any{"type": "string", "description": "The Instagram comment ID to reply to"},
+					"message":       map[string]any{"type": "string", "description": "The reply message text"},
+					"token_id":      map[string]any{"type": "string", "description": "Optional OAuth token ID in Vault"},
+					"credential_id": map[string]any{"type": "string", "description": "Optional Meta credential ID in Vault"},
+				},
+				"required": []string{"comment_id", "message"},
+			},
+		},
+		{
+			Name:        "facebook_post_feed",
+			Description: "Publish a post or link to a Facebook Page feed via Meta Graph API.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"message":       map[string]any{"type": "string", "description": "The post body text"},
+					"link":          map[string]any{"type": "string", "description": "Optional link URL to attach"},
+					"page_id":       map[string]any{"type": "string", "description": "Facebook Page ID (default: me)"},
+					"token_id":      map[string]any{"type": "string", "description": "Optional OAuth token ID in Vault"},
+					"credential_id": map[string]any{"type": "string", "description": "Optional Meta credential ID in Vault"},
+				},
+				"required": []string{"message"},
+			},
+		},
+		{
+			Name:        "facebook_read_page_feed",
+			Description: "Read recent status posts from a Facebook Page feed via Meta Graph API.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"page_id":       map[string]any{"type": "string", "description": "Facebook Page ID (default: me)"},
+					"token_id":      map[string]any{"type": "string", "description": "Optional OAuth token ID in Vault"},
+					"credential_id": map[string]any{"type": "string", "description": "Optional Meta credential ID in Vault"},
+				},
+			},
+		},
 	}
 }
 
@@ -182,6 +251,16 @@ func (t *Tools) CallTool(ctx context.Context, name string, args map[string]any) 
 		return t.callWhatsAppSendMessage(ctx, args)
 	case "whatsapp_send_template":
 		return t.callWhatsAppSendTemplate(ctx, args)
+	case "instagram_post_publish":
+		return t.callInstagramPostPublish(ctx, args)
+	case "instagram_read_comments":
+		return t.callInstagramReadComments(ctx, args)
+	case "instagram_reply_comment":
+		return t.callInstagramReplyComment(ctx, args)
+	case "facebook_post_feed":
+		return t.callFacebookPostFeed(ctx, args)
+	case "facebook_read_page_feed":
+		return t.callFacebookReadPageFeed(ctx, args)
 	default:
 		return nil, fmt.Errorf("unknown tool '%s'", name)
 	}
@@ -463,5 +542,171 @@ func (t *Tools) callWhatsAppSendTemplate(ctx context.Context, args map[string]an
 		URL:          url,
 		CredentialID: credID,
 		Body:         body,
+	})
+}
+
+func (t *Tools) callInstagramPostPublish(ctx context.Context, args map[string]any) (*dispatch.EgressReceipt, error) {
+	imageURL, _ := args["image_url"].(string)
+	caption, _ := args["caption"].(string)
+	igUserID, _ := args["ig_user_id"].(string)
+	if igUserID == "" {
+		igUserID = "me"
+	}
+
+	tokenID, _ := args["token_id"].(string)
+	if tokenID == "" {
+		tokenID = t.defaultTokens["instagram"]
+	}
+	credID, _ := args["credential_id"].(string)
+	if credID == "" && tokenID == "" {
+		credID = t.defaultCreds["instagram"]
+	}
+
+	url, _ := args["url"].(string)
+	if url == "" {
+		url = fmt.Sprintf("https://graph.facebook.com/v20.0/%s/media", igUserID)
+	}
+
+	body := map[string]any{
+		"image_url": imageURL,
+		"caption":   caption,
+	}
+
+	return t.dispatcher.Dispatch(ctx, dispatch.DispatchRequest{
+		Channel:      "instagram",
+		Action:       "post_publish",
+		Method:       http.MethodPost,
+		URL:          url,
+		TokenID:      tokenID,
+		CredentialID: credID,
+		Body:         body,
+	})
+}
+
+func (t *Tools) callInstagramReadComments(ctx context.Context, args map[string]any) (*dispatch.EgressReceipt, error) {
+	mediaID, _ := args["media_id"].(string)
+	tokenID, _ := args["token_id"].(string)
+	if tokenID == "" {
+		tokenID = t.defaultTokens["instagram"]
+	}
+	credID, _ := args["credential_id"].(string)
+	if credID == "" && tokenID == "" {
+		credID = t.defaultCreds["instagram"]
+	}
+
+	url, _ := args["url"].(string)
+	if url == "" {
+		url = fmt.Sprintf("https://graph.facebook.com/v20.0/%s/comments", mediaID)
+	}
+
+	return t.dispatcher.Dispatch(ctx, dispatch.DispatchRequest{
+		Channel:      "instagram",
+		Action:       "read_comments",
+		Method:       http.MethodGet,
+		URL:          url,
+		TokenID:      tokenID,
+		CredentialID: credID,
+	})
+}
+
+func (t *Tools) callInstagramReplyComment(ctx context.Context, args map[string]any) (*dispatch.EgressReceipt, error) {
+	commentID, _ := args["comment_id"].(string)
+	message, _ := args["message"].(string)
+	tokenID, _ := args["token_id"].(string)
+	if tokenID == "" {
+		tokenID = t.defaultTokens["instagram"]
+	}
+	credID, _ := args["credential_id"].(string)
+	if credID == "" && tokenID == "" {
+		credID = t.defaultCreds["instagram"]
+	}
+
+	url, _ := args["url"].(string)
+	if url == "" {
+		url = fmt.Sprintf("https://graph.facebook.com/v20.0/%s/replies", commentID)
+	}
+
+	body := map[string]any{
+		"message": message,
+	}
+
+	return t.dispatcher.Dispatch(ctx, dispatch.DispatchRequest{
+		Channel:      "instagram",
+		Action:       "reply_comment",
+		Method:       http.MethodPost,
+		URL:          url,
+		TokenID:      tokenID,
+		CredentialID: credID,
+		Body:         body,
+	})
+}
+
+func (t *Tools) callFacebookPostFeed(ctx context.Context, args map[string]any) (*dispatch.EgressReceipt, error) {
+	message, _ := args["message"].(string)
+	link, _ := args["link"].(string)
+	pageID, _ := args["page_id"].(string)
+	if pageID == "" {
+		pageID = "me"
+	}
+
+	tokenID, _ := args["token_id"].(string)
+	if tokenID == "" {
+		tokenID = t.defaultTokens["facebook"]
+	}
+	credID, _ := args["credential_id"].(string)
+	if credID == "" && tokenID == "" {
+		credID = t.defaultCreds["facebook"]
+	}
+
+	url, _ := args["url"].(string)
+	if url == "" {
+		url = fmt.Sprintf("https://graph.facebook.com/v20.0/%s/feed", pageID)
+	}
+
+	body := map[string]any{
+		"message": message,
+	}
+	if link != "" {
+		body["link"] = link
+	}
+
+	return t.dispatcher.Dispatch(ctx, dispatch.DispatchRequest{
+		Channel:      "facebook",
+		Action:       "post_feed",
+		Method:       http.MethodPost,
+		URL:          url,
+		TokenID:      tokenID,
+		CredentialID: credID,
+		Body:         body,
+	})
+}
+
+func (t *Tools) callFacebookReadPageFeed(ctx context.Context, args map[string]any) (*dispatch.EgressReceipt, error) {
+	pageID, _ := args["page_id"].(string)
+	if pageID == "" {
+		pageID = "me"
+	}
+
+	tokenID, _ := args["token_id"].(string)
+	if tokenID == "" {
+		tokenID = t.defaultTokens["facebook"]
+	}
+	credID, _ := args["credential_id"].(string)
+	if credID == "" && tokenID == "" {
+		credID = t.defaultCreds["facebook"]
+	}
+
+	url, _ := args["url"].(string)
+	if url == "" {
+		url = fmt.Sprintf("https://graph.facebook.com/v20.0/%s/feed", pageID)
+	}
+
+	return t.dispatcher.Dispatch(ctx, dispatch.DispatchRequest{
+		Channel:      "facebook",
+		Action:       "read_page_feed",
+		Method:       http.MethodGet,
+		URL:          url,
+		TokenID:      tokenID,
+		CredentialID: credID,
 	})
 }
