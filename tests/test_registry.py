@@ -62,3 +62,4 @@ def test_revoke_agent(registry: AgentRegistry):
     
     # Revoked agents should not resolve via token lookup
     assert registry.get_agent_by_token(raw_token) is None
+

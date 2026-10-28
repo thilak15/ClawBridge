@@ -92,3 +92,4 @@ class AgentAuthenticator:
             channel=channel,
             action=action,
         )
+

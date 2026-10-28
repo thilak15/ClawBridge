@@ -35,3 +35,4 @@ def test_global_wildcard_grants_all():
 
 def test_empty_rules_denies_all():
     assert PolicyEngine.is_authorized([], channel="slack", action="post_message") is False
+

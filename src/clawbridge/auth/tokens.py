@@ -11,7 +11,7 @@ class TokenManager:
     TOKEN_PREFIX = "clw_agent_"
 
     @classmethod
-    def generate_token(cls, agent_id: str | None = None) -> tuple[str, str]:
+    def generate_token(cls) -> tuple[str, str]:
         """Generate a random 256-bit agent bearer token and its SHA-256 storage hash.
 
         Returns:
@@ -32,3 +32,4 @@ class TokenManager:
         """Verify token authenticity in constant time to prevent timing attacks."""
         computed_hash = cls.hash_token(raw_token)
         return hmac.compare_digest(computed_hash, expected_hash)
+

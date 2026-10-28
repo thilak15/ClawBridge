@@ -108,3 +108,4 @@ def test_privilege_escalation_blocked_by_acl(auth_stack):
         assert row is not None
         assert row["agent_id"] == agent.id
         assert row["channel"] == "jira"
+

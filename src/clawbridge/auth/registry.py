@@ -4,6 +4,7 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Any
 
 from clawbridge.auth.tokens import TokenManager
 from clawbridge.vault.db import DatabaseManager
@@ -36,6 +37,18 @@ class AgentRegistry:
     def __init__(self, db_manager: DatabaseManager):
         self.db_manager = db_manager
 
+    def _row_to_record(self, row: dict[str, Any] | Any) -> AgentRecord:
+        allowed_actions = json.loads(row["allowed_actions_json"])
+        return AgentRecord(
+            id=row["id"],
+            name=row["name"],
+            token_hash=row["token_hash"],
+            status=row["status"],
+            allowed_actions=allowed_actions,
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+
     def register_agent(
         self,
         name: str,
@@ -44,7 +57,7 @@ class AgentRegistry:
     ) -> tuple[AgentRecord, str]:
         """Register a new autonomous agent and return its record plus the raw bearer token once."""
         agent_id = agent_id or f"agent_{uuid.uuid4().hex[:12]}"
-        raw_token, token_hash = TokenManager.generate_token(agent_id)
+        raw_token, token_hash = TokenManager.generate_token()
         now = datetime.now(timezone.utc).isoformat()
         actions_json = json.dumps(allowed_actions)
 
@@ -75,19 +88,10 @@ class AgentRegistry:
             if not row:
                 raise AgentNotFoundError(f"Agent '{agent_id}' not found")
 
-            allowed_actions = json.loads(row["allowed_actions_json"])
-            return AgentRecord(
-                id=row["id"],
-                name=row["name"],
-                token_hash=row["token_hash"],
-                status=row["status"],
-                allowed_actions=allowed_actions,
-                created_at=row["created_at"],
-                updated_at=row["updated_at"],
-            )
+            return self._row_to_record(row)
 
     def get_agent_by_token(self, raw_token: str) -> AgentRecord | None:
-        """Resolve an active agent record from a raw bearer token."""
+        """Resolve an active agent record from a raw bearer token with constant-time verification."""
         token_hash = TokenManager.hash_token(raw_token)
         with self.db_manager.connection() as conn:
             row = conn.execute(
@@ -97,16 +101,11 @@ class AgentRegistry:
             if not row:
                 return None
 
-            allowed_actions = json.loads(row["allowed_actions_json"])
-            return AgentRecord(
-                id=row["id"],
-                name=row["name"],
-                token_hash=row["token_hash"],
-                status=row["status"],
-                allowed_actions=allowed_actions,
-                created_at=row["created_at"],
-                updated_at=row["updated_at"],
-            )
+            # Constant-time verification to prevent timing leakages
+            if not TokenManager.verify_token(raw_token, row["token_hash"]):
+                return None
+
+            return self._row_to_record(row)
 
     def revoke_agent(self, agent_id: str) -> None:
         """Revoke an agent's access, invalidating its bearer token."""
@@ -118,3 +117,4 @@ class AgentRegistry:
             )
             if cursor.rowcount == 0:
                 raise AgentNotFoundError(f"Agent '{agent_id}' not found")
+
