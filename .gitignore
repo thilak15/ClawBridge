@@ -1,3 +1,7 @@
 .DS_Store
 .preflight/cache.db
 preflight/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
