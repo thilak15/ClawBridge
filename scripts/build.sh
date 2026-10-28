@@ -4,7 +4,7 @@ set -e
 # Cross-platform static binary compilation script for ClawBridge
 # Zero CGO dependencies, 100% portable static binaries
 
-VERSION="1.0.0"
+VERSION="1.0.1"
 OUTPUT_DIR="dist"
 mkdir -p "$OUTPUT_DIR"
 

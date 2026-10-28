@@ -5,7 +5,7 @@ set -e
 # Detects operating system and architecture, installs static binary
 
 REPO="thilak15/ClawBridge"
-VERSION="1.0.0"
+VERSION="1.0.1"
 
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 ARCH="$(uname -m)"

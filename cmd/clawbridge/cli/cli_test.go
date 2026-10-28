@@ -18,7 +18,7 @@ func TestCLI_VersionAndHelp(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("expected code 0, got %d", code)
 	}
-	if !strings.Contains(out.String(), "ClawBridge v1.0.0") {
+	if !strings.Contains(out.String(), "ClawBridge v1.0.1") {
 		t.Errorf("expected version output, got:\n%s", out.String())
 	}
 

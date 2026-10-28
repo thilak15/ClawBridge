@@ -137,7 +137,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 #### Option B: Direct Precompiled Binary Download
 
-Download static binaries directly from [GitHub Releases (v1.0.0)](https://github.com/thilak15/ClawBridge/releases/latest) for your target platform:
+Download static binaries directly from [GitHub Releases (v1.0.1)](https://github.com/thilak15/ClawBridge/releases/latest) for your target platform:
 - `clawbridge-darwin-arm64` (macOS Apple Silicon)
 - `clawbridge-darwin-amd64` (macOS Intel)
 - `clawbridge-linux-amd64` (Linux x86_64)
@@ -211,6 +211,9 @@ clawbridge connect jira
 clawbridge connect discord
 clawbridge connect twitter
 clawbridge connect github
+clawbridge connect gemini
+clawbridge connect openai
+clawbridge connect anthropic
 ```
 
 ### Permission Wizard

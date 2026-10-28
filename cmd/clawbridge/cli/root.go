@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	Version = "1.0.0"
+	Version = "1.0.1"
 	Banner  = `=======================================================
                       ClawBridge                       
          Zero-Trust Multi-Agent Egress Gateway         
