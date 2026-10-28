@@ -166,3 +166,45 @@ func (v *WebhookVerifier) VerifyHMACSHA256(
 		IsValid:    true,
 	}, nil
 }
+
+// VerifyTelegramSecret validates incoming Telegram webhooks using the X-Telegram-Bot-Api-Secret-Token header.
+func (v *WebhookVerifier) VerifyTelegramSecret(
+	body []byte,
+	secretTokenHeader string,
+	expectedSecret string,
+	deliveryID string,
+) (*VerifiedWebhook, error) {
+	if secretTokenHeader == "" {
+		return nil, fmt.Errorf("missing X-Telegram-Bot-Api-Secret-Token header")
+	}
+
+	if secretTokenHeader != expectedSecret {
+		return nil, fmt.Errorf("telegram secret token mismatch")
+	}
+
+	if deliveryID != "" {
+		if err := v.checkAndRecordDelivery("telegram", deliveryID, body); err != nil {
+			return nil, err
+		}
+	}
+
+	var payload map[string]any
+	_ = json.Unmarshal(body, &payload)
+
+	return &VerifiedWebhook{
+		Channel:    "telegram",
+		DeliveryID: deliveryID,
+		Payload:    payload,
+		IsValid:    true,
+	}, nil
+}
+
+// VerifyWhatsApp validates incoming WhatsApp Cloud API webhooks using Meta HMAC-SHA256 signature (X-Hub-Signature-256).
+func (v *WebhookVerifier) VerifyWhatsApp(
+	body []byte,
+	signatureHeader string,
+	appSecret string,
+	deliveryID string,
+) (*VerifiedWebhook, error) {
+	return v.VerifyHMACSHA256("whatsapp", body, signatureHeader, appSecret, deliveryID, "sha256=")
+}

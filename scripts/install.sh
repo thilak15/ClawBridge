@@ -63,5 +63,8 @@ else
 fi
 
 chmod +x "$TARGET"
+if [ "$OS" = "darwin" ] && command -v codesign >/dev/null 2>&1; then
+    codesign -s - -f "$TARGET" >/dev/null 2>&1 || true
+fi
 echo "Successfully installed ClawBridge to ${TARGET}"
 "$TARGET" --version

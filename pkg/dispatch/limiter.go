@@ -30,11 +30,13 @@ type TokenBucketLimiter struct {
 // NewTokenBucketLimiter creates a new rate limiter with optional custom channel rates.
 func NewTokenBucketLimiter(rates map[string]ChannelRate) *TokenBucketLimiter {
 	defaults := map[string]ChannelRate{
-		"slack":   {RatePerSecond: 1.0, Capacity: 3.0},
-		"jira":    {RatePerSecond: 5.0, Capacity: 10.0},
-		"twitter": {RatePerSecond: 2.0, Capacity: 5.0},
-		"discord": {RatePerSecond: 5.0, Capacity: 10.0},
-		"default": {RatePerSecond: 5.0, Capacity: 10.0},
+		"slack":    {RatePerSecond: 1.0, Capacity: 3.0},
+		"jira":     {RatePerSecond: 5.0, Capacity: 10.0},
+		"twitter":  {RatePerSecond: 2.0, Capacity: 5.0},
+		"discord":  {RatePerSecond: 5.0, Capacity: 10.0},
+		"telegram": {RatePerSecond: 30.0, Capacity: 30.0},
+		"whatsapp": {RatePerSecond: 80.0, Capacity: 100.0},
+		"default":  {RatePerSecond: 5.0, Capacity: 10.0},
 	}
 
 	for k, v := range rates {
