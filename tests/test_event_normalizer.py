@@ -80,3 +80,4 @@ def test_generic_event_normalization():
     assert event.topic == "custom:ping"
     assert event.channel == "custom"
     assert event.event_type == "ping"
+

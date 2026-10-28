@@ -133,3 +133,4 @@ class EventNormalizer:
             content=payload.get("text") or payload.get("message"),
             data=payload,
         )
+

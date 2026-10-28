@@ -132,3 +132,4 @@ class WebhookVerifier:
             delivery_id=delivery_id,
             payload=self._parse_payload(body),
         )
+

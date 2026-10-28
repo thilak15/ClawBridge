@@ -57,3 +57,4 @@ class EventBroadcaster:
         """Format an InboundEvent as a Server-Sent Events (SSE) compliant message block."""
         data_json = json.dumps(asdict(event))
         return f"id: {event.event_id}\nevent: {event.topic}\ndata: {data_json}\n\n"
+

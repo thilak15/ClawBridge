@@ -279,3 +279,4 @@ async def test_e2e_oauth_token_refresh_single_flight(harness_env):
     assert all(r.status == "success" for r in receipts)
     # Critical Red-Team Check: Token refresh single-flight mutex ensured only 1 network refresh was executed!
     assert refresh_counter == 1
+

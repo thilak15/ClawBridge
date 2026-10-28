@@ -1,7 +1,7 @@
 [project]
 name = "clawbridge"
 version = "0.1.0"
-description = "Add your description here"
+description = "Zero-trust agent egress gateway and inbound event adapter"
 readme = "README.md"
 authors = [
     { name = "thilak15", email = "thilakreddy125@gmail.com" }

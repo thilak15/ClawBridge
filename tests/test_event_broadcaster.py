@@ -68,3 +68,4 @@ async def test_unsubscribe_cleans_up_queue():
 
     await broadcaster.unsubscribe(queue)
     assert len(broadcaster._subscribers) == 0
+

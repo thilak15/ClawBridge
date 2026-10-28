@@ -112,3 +112,4 @@ def test_github_and_generic_hmac_sha256_verification(db_mgr):
     )
     assert res.is_valid
     assert res.channel == "github"
+
