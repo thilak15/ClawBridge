@@ -144,10 +144,14 @@ func (o *Orchestrator) StartAgent(ctx context.Context, name string) error {
 	}
 
 	agentCtx, cancel := context.WithCancel(ctx)
+	var memStore agents.MemoryPersistence
+	if o.registry != nil && o.registry.DatabaseManager() != nil {
+		memStore = o.registry.DatabaseManager()
+	}
 	running := &RunningAgent{
 		Config:    cfg,
 		Token:     token,
-		Memory:    agents.NewSlidingMemory(agents.DefaultMaxMemoryTurns),
+		Memory:    agents.NewTieredMemory(name, agents.DefaultMaxMemoryTurns, memStore),
 		ColorCode: pickColor(name),
 		TaskChan:  make(chan string, 100),
 		Cancel:    cancel,
@@ -349,7 +353,7 @@ func (o *Orchestrator) executeTask(ctx context.Context, agt *RunningAgent, task 
 	req := llm.ChatRequest{
 		Model:        agt.Config.Model,
 		SystemPrompt: agt.Config.SystemPrompt,
-		Messages:     agt.Memory.GetMessages(),
+		Messages:     agt.Memory.GetContextMessages(),
 		Tools:        availableTools,
 	}
 
