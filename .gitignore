@@ -6,3 +6,10 @@ preflight/
 __pycache__/
 *.pyc
 .pytest_cache/
+bin/
+dist/
+*.db
+*.db-wal
+*.db-shm
+*.pid
+*.key

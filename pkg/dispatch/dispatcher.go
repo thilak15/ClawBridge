@@ -108,6 +108,13 @@ func (d *EgressDispatcher) Dispatch(ctx context.Context, req DispatchRequest) (*
 				Retryable:  false,
 			}, nil
 		}
+	} else if d.vault != nil && req.Channel != "" {
+		// Auto-resolve credential or token by channel if ID not specified
+		if cred, err := d.vault.GetCredentialByChannel(req.Channel); err == nil && cred != nil {
+			credRecord = cred
+		} else if tok, err := d.vault.GetOAuthTokenByChannel(req.Channel); err == nil && tok != nil {
+			tokenRecord = tok
+		}
 	}
 
 	// 3. Serialize Body

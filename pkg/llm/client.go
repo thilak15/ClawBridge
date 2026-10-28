@@ -51,6 +51,17 @@ func NewClient(config ClientConfig) *Client {
 	}
 }
 
+// NewClientFromEnv creates an LLM Client configured automatically from environment variables.
+func NewClientFromEnv(httpClient HTTPDoer) *Client {
+	provider, key, model := DetectProviderFromEnv()
+	return NewClient(ClientConfig{
+		Provider:   provider,
+		APIKey:     key,
+		Model:      model,
+		HTTPClient: httpClient,
+	})
+}
+
 // Chat sends a conversational turn to the configured LLM and returns the response.
 func (c *Client) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
 	switch c.config.Provider {
