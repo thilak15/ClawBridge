@@ -101,3 +101,41 @@ func CreateAgentYAML(dir string, cfg AgentConfig) (string, error) {
 
 	return filePath, nil
 }
+
+// UpdateAgentYAMLPermissions updates the permissions field in an existing agent YAML file.
+func UpdateAgentYAMLPermissions(dir string, name string, newPermissions []string) error {
+	pathYAML := filepath.Join(dir, fmt.Sprintf("%s.yaml", name))
+	pathYML := filepath.Join(dir, fmt.Sprintf("%s.yml", name))
+
+	targetPath := pathYAML
+	if _, err := os.Stat(pathYAML); os.IsNotExist(err) {
+		if _, err := os.Stat(pathYML); err == nil {
+			targetPath = pathYML
+		}
+	}
+
+	data, err := os.ReadFile(targetPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			_, err = CreateAgentYAML(dir, AgentConfig{
+				Name:        name,
+				Permissions: newPermissions,
+			})
+			return err
+		}
+		return fmt.Errorf("failed to read agent file: %w", err)
+	}
+
+	var cfg AgentConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return fmt.Errorf("failed to parse agent yaml: %w", err)
+	}
+
+	cfg.Permissions = newPermissions
+	outData, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal agent yaml: %w", err)
+	}
+
+	return os.WriteFile(targetPath, outData, 0644)
+}

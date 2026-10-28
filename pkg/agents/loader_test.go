@@ -85,3 +85,37 @@ func TestAgentLoader_CreateAgentYAML(t *testing.T) {
 func stringsContains(s, sub string) bool {
 	return len(s) >= len(sub) && (s == sub || filepath.Base(s) == sub || len(s) > 0)
 }
+
+func TestAgentLoader_UpdateAgentYAMLPermissions(t *testing.T) {
+	tempDir := t.TempDir()
+	agentsDir := filepath.Join(tempDir, "agents")
+
+	cfg := agents.AgentConfig{
+		Name:         "custom_bot",
+		Description:  "Dynamic agent",
+		SystemPrompt: "You are a custom bot.",
+		Permissions:  []string{"*"},
+	}
+
+	_, err := agents.CreateAgentYAML(agentsDir, cfg)
+	if err != nil {
+		t.Fatalf("failed to create agent yaml: %v", err)
+	}
+
+	newRules := []string{"slack:*", "jira:read"}
+	if err := agents.UpdateAgentYAMLPermissions(agentsDir, "custom_bot", newRules); err != nil {
+		t.Fatalf("failed to update yaml permissions: %v", err)
+	}
+
+	// Verify update
+	updatedConfigs, err := agents.LoadAgentsFromDir(agentsDir, nil)
+	if err != nil {
+		t.Fatalf("failed to reload agents: %v", err)
+	}
+	if len(updatedConfigs) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(updatedConfigs))
+	}
+	if len(updatedConfigs[0].Permissions) != 2 || updatedConfigs[0].Permissions[0] != "slack:*" {
+		t.Fatalf("unexpected updated permissions: %v", updatedConfigs[0].Permissions)
+	}
+}

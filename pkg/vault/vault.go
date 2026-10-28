@@ -162,6 +162,52 @@ func (v *CredentialVault) GetCredential(id string) (*StoredCredential, error) {
 	return &cred, nil
 }
 
+// UpsertCredentialByChannel inserts or updates a credential for a given channel.
+func (v *CredentialVault) UpsertCredentialByChannel(channel, authType string, data map[string]any) (string, error) {
+	encryptedBlob, err := v.encryptPayload(data)
+	if err != nil {
+		return "", err
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	var existingID string
+	err = v.db.DB().QueryRow("SELECT id FROM credentials WHERE channel = ? ORDER BY updated_at DESC LIMIT 1;", channel).Scan(&existingID)
+	if err == nil && existingID != "" {
+		query := `UPDATE credentials SET auth_type = ?, encrypted_blob = ?, updated_at = ? WHERE id = ?;`
+		_, err = v.db.DB().Exec(query, authType, encryptedBlob, now, existingID)
+		if err != nil {
+			return "", fmt.Errorf("failed to update credential: %w", err)
+		}
+		return existingID, nil
+	}
+
+	id := generateID("cred")
+	query := `
+	INSERT INTO credentials (id, channel, auth_type, encrypted_blob, created_at, updated_at)
+	VALUES (?, ?, ?, ?, ?, ?);
+	`
+	_, err = v.db.DB().Exec(query, id, channel, authType, encryptedBlob, now, now)
+	if err != nil {
+		return "", fmt.Errorf("failed to insert credential: %w", err)
+	}
+
+	return id, nil
+}
+
+// GetCredentialByChannel retrieves the most recent credential for a channel.
+func (v *CredentialVault) GetCredentialByChannel(channel string) (*StoredCredential, error) {
+	var id string
+	err := v.db.DB().QueryRow("SELECT id FROM credentials WHERE channel = ? ORDER BY updated_at DESC LIMIT 1;", channel).Scan(&id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("credential for channel '%s' not found", channel)
+		}
+		return nil, fmt.Errorf("failed to query credential for channel '%s': %w", channel, err)
+	}
+
+	return v.GetCredential(id)
+}
+
 // StoreOAuthToken encrypts and saves an OAuth token record with TTL in seconds.
 func (v *CredentialVault) StoreOAuthToken(channel, clientID string, tokenData map[string]any, expiresIn int) (string, error) {
 	id := generateID("tok")
@@ -306,4 +352,57 @@ func (v *CredentialVault) GetOrRefreshOAuthToken(
 	}
 
 	return freshResult.(*OAuthTokenRecord), nil
+}
+
+// UpsertOAuthTokenByChannel inserts or updates an OAuth token record for a given channel.
+func (v *CredentialVault) UpsertOAuthTokenByChannel(channel, clientID string, tokenData map[string]any, expiresIn int) (string, error) {
+	encryptedBlob, err := v.encryptPayload(tokenData)
+	if err != nil {
+		return "", err
+	}
+
+	now := time.Now().UTC()
+	nowStr := now.Format(time.RFC3339)
+	var expiresAt *float64
+	if expiresIn != 0 {
+		expTime := float64(now.Add(time.Duration(expiresIn) * time.Second).Unix())
+		expiresAt = &expTime
+	}
+
+	var existingID string
+	err = v.db.DB().QueryRow("SELECT id FROM oauth_tokens WHERE channel = ? ORDER BY updated_at DESC LIMIT 1;", channel).Scan(&existingID)
+	if err == nil && existingID != "" {
+		query := `UPDATE oauth_tokens SET client_id = ?, encrypted_blob = ?, expires_at = ?, updated_at = ? WHERE id = ?;`
+		_, err = v.db.DB().Exec(query, clientID, encryptedBlob, expiresAt, nowStr, existingID)
+		if err != nil {
+			return "", fmt.Errorf("failed to update oauth token: %w", err)
+		}
+		return existingID, nil
+	}
+
+	id := generateID("tok")
+	query := `
+	INSERT INTO oauth_tokens (id, channel, client_id, encrypted_blob, expires_at, created_at, updated_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?);
+	`
+	_, err = v.db.DB().Exec(query, id, channel, clientID, encryptedBlob, expiresAt, nowStr, nowStr)
+	if err != nil {
+		return "", fmt.Errorf("failed to insert oauth token: %w", err)
+	}
+
+	return id, nil
+}
+
+// GetOAuthTokenByChannel retrieves the most recent oauth token record for a channel.
+func (v *CredentialVault) GetOAuthTokenByChannel(channel string) (*OAuthTokenRecord, error) {
+	var id string
+	err := v.db.DB().QueryRow("SELECT id FROM oauth_tokens WHERE channel = ? ORDER BY updated_at DESC LIMIT 1;", channel).Scan(&id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("oauth token for channel '%s' not found", channel)
+		}
+		return nil, fmt.Errorf("failed to query oauth token for channel '%s': %w", channel, err)
+	}
+
+	return v.GetOAuthToken(id)
 }
