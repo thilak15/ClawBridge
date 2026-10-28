@@ -34,21 +34,34 @@ if [ ! -w "$INSTALL_DIR" ]; then
     mkdir -p "$INSTALL_DIR"
 fi
 
-echo "Installing ClawBridge to ${INSTALL_DIR}..."
+TARGET="${INSTALL_DIR}/clawbridge"
+echo "Installing ClawBridge to ${TARGET}..."
 
-# If local binary exists in bin/ or dist/, copy it
+# 1. If local binary exists in dist/ or bin/, use it
 if [ -f "dist/${BIN_NAME}" ]; then
-    cp "dist/${BIN_NAME}" "${INSTALL_DIR}/clawbridge"
+    cp "dist/${BIN_NAME}" "$TARGET"
 elif [ -f "bin/clawbridge" ]; then
-    cp "bin/clawbridge" "${INSTALL_DIR}/clawbridge"
+    cp "bin/clawbridge" "$TARGET"
 else
-    # Download release binary from GitHub releases
+    # 2. Download release binary from GitHub releases with fail flag (-f)
     URL="https://github.com/${REPO}/releases/download/v${VERSION}/${BIN_NAME}"
     echo "Downloading ${URL}..."
-    curl -sSL "$URL" -o "${INSTALL_DIR}/clawbridge"
+    TMP_FILE="$(mktemp)"
+    if curl -sSLf "$URL" -o "$TMP_FILE"; then
+        mv "$TMP_FILE" "$TARGET"
+    else
+        rm -f "$TMP_FILE"
+        echo "Failed to download binary from GitHub Release."
+        if command -v go >/dev/null 2>&1; then
+            echo "Go detected. Compiling directly from source..."
+            GOBIN="$INSTALL_DIR" go install github.com/${REPO}/cmd/clawbridge@latest
+        else
+            echo "Please download the binary manually from: https://github.com/${REPO}/releases"
+            exit 1
+        fi
+    fi
 fi
 
-chmod +x "${INSTALL_DIR}/clawbridge"
-echo "Successfully installed ClawBridge to ${INSTALL_DIR}/clawbridge"
-"${INSTALL_DIR}/clawbridge" --version
-
+chmod +x "$TARGET"
+echo "Successfully installed ClawBridge to ${TARGET}"
+"$TARGET" --version
