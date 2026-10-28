@@ -99,6 +99,63 @@ func (t *Tools) ListTools() []ToolDefinition {
 				"required": []string{"channel_id", "content"},
 			},
 		},
+		{
+			Name:        "telegram_send_message",
+			Description: "Send a message to a Telegram chat or channel using an authenticated bot token.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"chat_id":       map[string]any{"type": "string", "description": "The Telegram chat ID or channel username (e.g. @channel)"},
+					"text":          map[string]any{"type": "string", "description": "The text message content"},
+					"parse_mode":    map[string]any{"type": "string", "description": "Optional parse mode (Markdown, HTML, or MarkdownV2)"},
+					"credential_id": map[string]any{"type": "string", "description": "Optional bot credential ID in Vault"},
+				},
+				"required": []string{"chat_id", "text"},
+			},
+		},
+		{
+			Name:        "telegram_send_photo",
+			Description: "Send a photo to a Telegram chat or channel with an optional caption.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"chat_id":       map[string]any{"type": "string", "description": "The Telegram chat ID"},
+					"photo_url":     map[string]any{"type": "string", "description": "Direct HTTP URL of the photo to send"},
+					"caption":       map[string]any{"type": "string", "description": "Optional photo caption"},
+					"credential_id": map[string]any{"type": "string", "description": "Optional bot credential ID in Vault"},
+				},
+				"required": []string{"chat_id", "photo_url"},
+			},
+		},
+		{
+			Name:        "whatsapp_send_message",
+			Description: "Send a text message to a WhatsApp user using the WhatsApp Cloud API.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"to":              map[string]any{"type": "string", "description": "Recipient phone number with country code (e.g. +14155552671)"},
+					"text":            map[string]any{"type": "string", "description": "The text message content"},
+					"phone_number_id": map[string]any{"type": "string", "description": "Optional sender Phone Number ID"},
+					"credential_id":   map[string]any{"type": "string", "description": "Optional WhatsApp credential ID in Vault"},
+				},
+				"required": []string{"to", "text"},
+			},
+		},
+		{
+			Name:        "whatsapp_send_template",
+			Description: "Send a pre-approved template message to a WhatsApp user using the WhatsApp Cloud API.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"to":              map[string]any{"type": "string", "description": "Recipient phone number with country code"},
+					"template_name":   map[string]any{"type": "string", "description": "Name of the approved template"},
+					"language_code":   map[string]any{"type": "string", "description": "Language code (default: en_US)"},
+					"phone_number_id": map[string]any{"type": "string", "description": "Optional sender Phone Number ID"},
+					"credential_id":   map[string]any{"type": "string", "description": "Optional WhatsApp credential ID in Vault"},
+				},
+				"required": []string{"to", "template_name"},
+			},
+		},
 	}
 }
 
@@ -117,6 +174,14 @@ func (t *Tools) CallTool(ctx context.Context, name string, args map[string]any) 
 		return t.callTwitterPostTweet(ctx, args)
 	case "discord_send_message":
 		return t.callDiscordSendMessage(ctx, args)
+	case "telegram_send_message":
+		return t.callTelegramSendMessage(ctx, args)
+	case "telegram_send_photo":
+		return t.callTelegramSendPhoto(ctx, args)
+	case "whatsapp_send_message":
+		return t.callWhatsAppSendMessage(ctx, args)
+	case "whatsapp_send_template":
+		return t.callWhatsAppSendTemplate(ctx, args)
 	default:
 		return nil, fmt.Errorf("unknown tool '%s'", name)
 	}
@@ -250,5 +315,153 @@ func (t *Tools) callDiscordSendMessage(ctx context.Context, args map[string]any)
 		Body: map[string]any{
 			"content": content,
 		},
+	})
+}
+
+func (t *Tools) callTelegramSendMessage(ctx context.Context, args map[string]any) (*dispatch.EgressReceipt, error) {
+	chatID, _ := args["chat_id"].(string)
+	text, _ := args["text"].(string)
+	parseMode, _ := args["parse_mode"].(string)
+
+	credID, _ := args["credential_id"].(string)
+	if credID == "" {
+		credID = t.defaultCreds["telegram"]
+	}
+
+	url, _ := args["url"].(string)
+	if url == "" {
+		url = "https://api.telegram.org/sendMessage"
+	}
+
+	body := map[string]any{
+		"chat_id": chatID,
+		"text":    text,
+	}
+	if parseMode != "" {
+		body["parse_mode"] = parseMode
+	}
+
+	return t.dispatcher.Dispatch(ctx, dispatch.DispatchRequest{
+		Channel:      "telegram",
+		Action:       "send_message",
+		Method:       http.MethodPost,
+		URL:          url,
+		CredentialID: credID,
+		Body:         body,
+	})
+}
+
+func (t *Tools) callTelegramSendPhoto(ctx context.Context, args map[string]any) (*dispatch.EgressReceipt, error) {
+	chatID, _ := args["chat_id"].(string)
+	photoURL, _ := args["photo_url"].(string)
+	caption, _ := args["caption"].(string)
+
+	credID, _ := args["credential_id"].(string)
+	if credID == "" {
+		credID = t.defaultCreds["telegram"]
+	}
+
+	url, _ := args["url"].(string)
+	if url == "" {
+		url = "https://api.telegram.org/sendPhoto"
+	}
+
+	body := map[string]any{
+		"chat_id": chatID,
+		"photo":   photoURL,
+	}
+	if caption != "" {
+		body["caption"] = caption
+	}
+
+	return t.dispatcher.Dispatch(ctx, dispatch.DispatchRequest{
+		Channel:      "telegram",
+		Action:       "send_photo",
+		Method:       http.MethodPost,
+		URL:          url,
+		CredentialID: credID,
+		Body:         body,
+	})
+}
+
+func (t *Tools) callWhatsAppSendMessage(ctx context.Context, args map[string]any) (*dispatch.EgressReceipt, error) {
+	to, _ := args["to"].(string)
+	text, _ := args["text"].(string)
+	phoneID, _ := args["phone_number_id"].(string)
+	if phoneID == "" {
+		phoneID = "default"
+	}
+
+	credID, _ := args["credential_id"].(string)
+	if credID == "" {
+		credID = t.defaultCreds["whatsapp"]
+	}
+
+	url, _ := args["url"].(string)
+	if url == "" {
+		url = fmt.Sprintf("https://graph.facebook.com/v20.0/%s/messages", phoneID)
+	}
+
+	body := map[string]any{
+		"messaging_product": "whatsapp",
+		"recipient_type":    "individual",
+		"to":                to,
+		"type":              "text",
+		"text": map[string]any{
+			"body": text,
+		},
+	}
+
+	return t.dispatcher.Dispatch(ctx, dispatch.DispatchRequest{
+		Channel:      "whatsapp",
+		Action:       "send_message",
+		Method:       http.MethodPost,
+		URL:          url,
+		CredentialID: credID,
+		Body:         body,
+	})
+}
+
+func (t *Tools) callWhatsAppSendTemplate(ctx context.Context, args map[string]any) (*dispatch.EgressReceipt, error) {
+	to, _ := args["to"].(string)
+	templateName, _ := args["template_name"].(string)
+	langCode, _ := args["language_code"].(string)
+	if langCode == "" {
+		langCode = "en_US"
+	}
+	phoneID, _ := args["phone_number_id"].(string)
+	if phoneID == "" {
+		phoneID = "default"
+	}
+
+	credID, _ := args["credential_id"].(string)
+	if credID == "" {
+		credID = t.defaultCreds["whatsapp"]
+	}
+
+	url, _ := args["url"].(string)
+	if url == "" {
+		url = fmt.Sprintf("https://graph.facebook.com/v20.0/%s/messages", phoneID)
+	}
+
+	body := map[string]any{
+		"messaging_product": "whatsapp",
+		"to":                to,
+		"type":              "template",
+		"template": map[string]any{
+			"name": templateName,
+			"language": map[string]any{
+				"code": langCode,
+			},
+		},
+	}
+
+	return t.dispatcher.Dispatch(ctx, dispatch.DispatchRequest{
+		Channel:      "whatsapp",
+		Action:       "send_template",
+		Method:       http.MethodPost,
+		URL:          url,
+		CredentialID: credID,
+		Body:         body,
 	})
 }
