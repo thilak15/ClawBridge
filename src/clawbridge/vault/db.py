@@ -65,8 +65,24 @@ CREATE INDEX IF NOT EXISTS idx_webhook_events_channel ON webhook_events(channel)
 CREATE INDEX IF NOT EXISTS idx_webhook_events_delivery_id ON webhook_events(delivery_id);
 """
 
+MIGRATION_V2 = """
+CREATE TABLE IF NOT EXISTS agents (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    token_hash TEXT UNIQUE NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    allowed_actions_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_agents_token_hash ON agents(token_hash);
+CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
+"""
+
 MIGRATIONS = [
     (1, "init_vault_schema", MIGRATION_V1),
+    (2, "add_agents_identity_table", MIGRATION_V2),
 ]
 
 
