@@ -134,8 +134,8 @@ func TestRunConnectWizard_Gemini(t *testing.T) {
 	defer cleanup()
 	defer os.Remove(".env")
 
-	// Select 6 (Gemini), then enter AQ key
-	input := "6\nAQ.Ab8RN123456789\n"
+	// Select 10 (Gemini), then enter AQ key
+	input := "10\nAQ.Ab8RN123456789\n"
 	in := strings.NewReader(input)
 	out := &bytes.Buffer{}
 
@@ -150,6 +150,28 @@ func TestRunConnectWizard_Gemini(t *testing.T) {
 	}
 	if cred.Data["key"] != "AQ.Ab8RN123456789" {
 		t.Errorf("unexpected gemini key data: %v", cred.Data)
+	}
+}
+
+func TestRunConnectWizard_Telegram(t *testing.T) {
+	v, _, cleanup := setupTestVault(t)
+	defer cleanup()
+
+	input := "telegram-token-123\n"
+	in := strings.NewReader(input)
+	out := &bytes.Buffer{}
+
+	err := wizard.RunConnectWizard(in, out, v, "telegram")
+	if err != nil {
+		t.Fatalf("unexpected error running telegram connect wizard: %v", err)
+	}
+
+	cred, err := v.GetCredentialByChannel("telegram")
+	if err != nil {
+		t.Fatalf("failed to retrieve telegram credential: %v", err)
+	}
+	if cred.Data["token"] != "telegram-token-123" {
+		t.Errorf("unexpected telegram data: %v", cred.Data)
 	}
 }
 

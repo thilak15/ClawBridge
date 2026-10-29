@@ -3,13 +3,11 @@ package runner
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 
-	"clawbridge/pkg/agents"
 	"clawbridge/pkg/auth"
 	"clawbridge/pkg/bridge"
 	"clawbridge/pkg/inbound"
@@ -20,41 +18,39 @@ import (
 
 // ConsoleConfig encapsulates the dependencies needed by the interactive console.
 type ConsoleConfig struct {
-	In           io.Reader
-	Out          io.Writer
-	Orchestrator *Orchestrator
-	Broadcaster  *inbound.EventBroadcaster
-	Vault        *vault.CredentialVault
-	Registry     *auth.AgentRegistry
-	AgentsDir    string
-	Tools        *mcp.Tools
+	In          io.Reader
+	Out         io.Writer
+	Broadcaster *inbound.EventBroadcaster
+	Vault       *vault.CredentialVault
+	Registry    *auth.AgentRegistry
+	AgentsDir   string
+	Tools       *mcp.Tools
 }
 
-// RunConsole runs the hybrid interactive CLI and reactive inbound webhook listener.
+// RunConsole runs the Universal Connector and MCP Gateway interactive console.
 func RunConsole(
 	ctx context.Context,
 	in io.Reader,
 	out io.Writer,
-	orch *Orchestrator,
 	broadcaster *inbound.EventBroadcaster,
+	v *vault.CredentialVault,
+	reg *auth.AgentRegistry,
+	tools *mcp.Tools,
 ) error {
 	return RunConsoleWithConfig(ctx, ConsoleConfig{
-		In:           in,
-		Out:          out,
-		Orchestrator: orch,
-		Broadcaster:  broadcaster,
+		In:          in,
+		Out:         out,
+		Broadcaster: broadcaster,
+		Vault:       v,
+		Registry:    reg,
+		Tools:       tools,
 	})
 }
 
-// RunConsoleWithConfig runs the hybrid interactive CLI, management REPL, and reactive inbound webhook listener.
+// RunConsoleWithConfig runs the hybrid interactive CLI, connector management, and MCP verification console.
 func RunConsoleWithConfig(ctx context.Context, cfg ConsoleConfig) error {
-	if cfg.Orchestrator == nil {
-		return fmt.Errorf("orchestrator cannot be nil")
-	}
-
 	in := cfg.In
 	out := cfg.Out
-	orch := cfg.Orchestrator
 	broadcaster := cfg.Broadcaster
 
 	// 1. Start reactive inbound event listener if broadcaster is provided
@@ -70,7 +66,7 @@ func RunConsoleWithConfig(ctx context.Context, cfg ConsoleConfig) error {
 					if !ok {
 						return
 					}
-					routeInboundEvent(orch, event)
+					fmt.Fprintf(out, "\n[Inbound Event: %s] %s (Topic: %s)\nclawbridge> ", event.Channel, event.EventID, event.Topic)
 				}
 			}
 		}()
@@ -87,7 +83,7 @@ func RunConsoleWithConfig(ctx context.Context, cfg ConsoleConfig) error {
 		}
 		return strings.TrimSpace(scanner.Text())
 	}
-	fmt.Fprintln(out, "ClawBridge Multi-Agent Console (Type 'help' for commands, 'exit' to quit)")
+	fmt.Fprintln(out, "ClawBridge Universal Gateway Console (Type 'help' for commands, 'exit' to quit)")
 
 	for {
 		select {
@@ -166,6 +162,29 @@ func RunConsoleWithConfig(ctx context.Context, cfg ConsoleConfig) error {
 				fmt.Fprintln(out, "  No platforms connected yet. Type 'connect' to connect your first platform.")
 			}
 
+		case strings.HasPrefix(lowerLine, "connect"):
+			if cfg.Vault == nil {
+				fmt.Fprintln(out, "Credential vault not available in this session.")
+				continue
+			}
+			parts := strings.Fields(line)
+			targetApp := ""
+			if len(parts) > 1 {
+				targetApp = parts[1]
+			}
+			if err := wizard.RunConnectWizardWithPrompt(prompt, out, cfg.Vault, targetApp); err != nil {
+				fmt.Fprintf(out, "Connect wizard error: %v\n", err)
+			}
+
+		case lowerLine == "config":
+			if cfg.Registry == nil || cfg.AgentsDir == "" {
+				fmt.Fprintln(out, "Agent configuration not available in this session.")
+				continue
+			}
+			if err := wizard.RunConfigWizardWithPrompt(prompt, out, cfg.Registry, cfg.AgentsDir); err != nil {
+				fmt.Fprintf(out, "Config wizard error: %v\n", err)
+			}
+
 		case strings.HasPrefix(lowerLine, "bridge "):
 			parts := strings.Fields(line)
 			if len(parts) < 2 {
@@ -193,92 +212,10 @@ func RunConsoleWithConfig(ctx context.Context, cfg ConsoleConfig) error {
 				fmt.Fprintf(out, "Unknown bridge target: '%s'. Use 'bridge openclaw' or 'bridge nemoclaw'.\n", target)
 			}
 
-		case lowerLine == "list":
-			running := orch.ListRunning()
-			if len(running) == 0 {
-				fmt.Fprintln(out, "No agents are currently running.")
-			} else {
-				fmt.Fprintf(out, "Running agents (%d): %s\n", len(running), strings.Join(running, ", "))
-			}
-
-		case lowerLine == "status":
-			running := orch.ListRunning()
-			if len(running) == 0 {
-				fmt.Fprintln(out, "No agents are currently running.")
-			} else {
-				fmt.Fprintln(out, "Agent Status:")
-				for _, name := range running {
-					mem := orch.GetAgentMemory(name)
-					turns := 0
-					if mem != nil {
-						turns = mem.Count()
-					}
-					fmt.Fprintf(out, "  - %s: Active (Sliding memory turns: %d/15)\n", name, turns)
-				}
-			}
-
-		case strings.HasPrefix(lowerLine, "connect"):
-			if cfg.Vault == nil {
-				fmt.Fprintln(out, "Credential vault not available in this session.")
-				continue
-			}
-			parts := strings.Fields(line)
-			targetApp := ""
-			if len(parts) > 1 {
-				targetApp = parts[1]
-			}
-			if err := wizard.RunConnectWizardWithPrompt(prompt, out, cfg.Vault, targetApp); err != nil {
-				fmt.Fprintf(out, "Connect wizard error: %v\n", err)
-			}
-
-		case lowerLine == "config":
-			if cfg.Registry == nil || cfg.AgentsDir == "" {
-				fmt.Fprintln(out, "Agent configuration not available in this session.")
-				continue
-			}
-			if err := wizard.RunConfigWizardWithPrompt(prompt, out, cfg.Registry, cfg.AgentsDir); err != nil {
-				fmt.Fprintf(out, "Config wizard error: %v\n", err)
-			}
-
-		case strings.HasPrefix(lowerLine, "agent create ") || strings.HasPrefix(lowerLine, "create agent "):
-			if cfg.Registry == nil || cfg.AgentsDir == "" {
-				fmt.Fprintln(out, "Agent registry not available in this session.")
-				continue
-			}
-			parts := strings.Fields(line)
-			if len(parts) < 3 {
-				fmt.Fprintln(out, "Usage: agent create <name>")
-				continue
-			}
-			agentName := strings.ToLower(strings.TrimSpace(parts[2]))
-			createdPath, err := agents.CreateAgentYAML(cfg.AgentsDir, agents.AgentConfig{
-				Name:         agentName,
-				Description:  fmt.Sprintf("Autonomous agent '%s' created via console", agentName),
-				SystemPrompt: fmt.Sprintf("You are %s, an autonomous multi-platform agent equipped with ClawBridge tools.", agentName),
-				Model:        "gemini-3.8-flash",
-				Permissions:  []string{"*"},
-			})
-			if err != nil {
-				fmt.Fprintf(out, "Failed to create agent configuration: %v\n", err)
-				continue
-			}
-			if _, _, err := cfg.Registry.RegisterAgent(agentName, []string{"*"}); err != nil {
-				fmt.Fprintf(out, "Failed to register agent in vault: %v\n", err)
-				continue
-			}
-			fmt.Fprintf(out, "Created agent '%s' configuration at %s\n", agentName, createdPath)
-
-			// Dynamically start agent in active orchestrator
-			if err := orch.StartAgent(ctx, agentName); err != nil {
-				fmt.Fprintf(out, "Warning: agent created but failed to start: %v\n", err)
-			} else {
-				fmt.Fprintf(out, "Agent '%s' is now running and ready for instructions.\n", agentName)
-			}
-
 		case strings.HasPrefix(lowerLine, "run ") || strings.HasPrefix(lowerLine, "start "):
 			parts := strings.Fields(line)
 			if len(parts) < 2 {
-				fmt.Fprintln(out, "Usage: run <openclaw|nemoclaw|agent_name>")
+				fmt.Fprintln(out, "Usage: run <openclaw|nemoclaw> [args...]")
 				continue
 			}
 			agentName := strings.ToLower(strings.TrimSpace(parts[1]))
@@ -295,70 +232,12 @@ func RunConsoleWithConfig(ctx context.Context, cfg ConsoleConfig) error {
 				}
 				continue
 			}
-			if orch.IsRunning(agentName) {
-				fmt.Fprintf(out, "Agent '%s' is already running.\n", agentName)
-				continue
-			}
-			if err := orch.StartAgent(ctx, agentName); err != nil {
-				fmt.Fprintf(out, "Failed to start agent '%s': %v\n", agentName, err)
-			} else {
-				fmt.Fprintf(out, "Agent '%s' is now running.\n", agentName)
-			}
+			fmt.Fprintf(out, "Unknown run target '%s'. Use 'run openclaw' or 'run nemoclaw'.\n", agentName)
 
 		default:
-			// Parse <target>: <task>
-			parts := strings.SplitN(line, ":", 2)
-			if len(parts) != 2 {
-				fmt.Fprintf(out, "Unknown command: '%s'. Use '<agent>: <task>', 'connect', 'config', 'agent create <name>', or type 'help'.\n", line)
-				continue
-			}
-
-			target := strings.TrimSpace(parts[0])
-			task := strings.TrimSpace(parts[1])
-
-			if task == "" {
-				fmt.Fprintln(out, "Task instruction cannot be empty.")
-				continue
-			}
-
-			if strings.EqualFold(target, "broadcast") {
-				if err := orch.BroadcastTask(task); err != nil {
-					fmt.Fprintf(out, "Broadcast failed: %v\n", err)
-				} else {
-					fmt.Fprintln(out, "Task broadcasted to all running agents.")
-				}
-			} else {
-				if err := orch.DispatchTask(target, task); err != nil {
-					fmt.Fprintf(out, "Dispatch failed: %v\n", err)
-				} else {
-					fmt.Fprintf(out, "Task dispatched to '%s'.\n", target)
-				}
-			}
+			fmt.Fprintf(out, "Unknown command: '%s'. Type 'help' for available commands.\n", line)
 		}
 	}
 
-	return scanner.Err()
-}
-
-func routeInboundEvent(orch *Orchestrator, event *inbound.InboundEvent) {
-	payloadStr := event.Content
-	if payloadStr == "" && event.Data != nil {
-		b, _ := json.Marshal(event.Data)
-		payloadStr = string(b)
-	}
-	taskPrompt := fmt.Sprintf("Inbound event received on topic '%s': %s. React appropriately.", event.Topic, payloadStr)
-
-	// Targeted routing by channel topic
-	topicLower := strings.ToLower(event.Topic)
-	if strings.HasPrefix(topicLower, "slack:") && orch.IsRunning("nemoclaw") {
-		_ = orch.DispatchTask("nemoclaw", taskPrompt)
-		return
-	}
-	if strings.HasPrefix(topicLower, "jira:") && orch.IsRunning("openclaw") {
-		_ = orch.DispatchTask("openclaw", taskPrompt)
-		return
-	}
-
-	// Default fallback: broadcast to all running agents
-	_ = orch.BroadcastTask(taskPrompt)
+	return nil
 }

@@ -37,10 +37,14 @@ func RunConnectWizardWithPrompt(prompt func(msg string) string, out io.Writer, v
 		fmt.Fprintln(out, "3) Discord")
 		fmt.Fprintln(out, "4) Twitter / X")
 		fmt.Fprintln(out, "5) GitHub")
-		fmt.Fprintln(out, "6) Google Gemini (LLM)")
-		fmt.Fprintln(out, "7) OpenAI (LLM)")
-		fmt.Fprintln(out, "8) Anthropic Claude (LLM)")
-		choice := prompt("Select an app or LLM to connect [1-8 or name]: ")
+		fmt.Fprintln(out, "6) Telegram")
+		fmt.Fprintln(out, "7) WhatsApp")
+		fmt.Fprintln(out, "8) Meta (Instagram / Facebook)")
+		fmt.Fprintln(out, "9) Google Workspace (Gmail / Calendar)")
+		fmt.Fprintln(out, "10) Google Gemini (LLM)")
+		fmt.Fprintln(out, "11) OpenAI (LLM)")
+		fmt.Fprintln(out, "12) Anthropic Claude (LLM)")
+		choice := prompt("Select an app or LLM to connect [1-12 or name]: ")
 		app = normalizeAppName(choice)
 	}
 
@@ -133,6 +137,66 @@ func RunConnectWizardWithPrompt(prompt func(msg string) string, out io.Writer, v
 		}
 		fmt.Fprintln(out, "Successfully encrypted and stored GitHub credentials in vault.")
 
+	case "telegram":
+		fmt.Fprintln(out, "Connecting Telegram Bot...")
+		token := prompt("Telegram Bot Token (from @BotFather): ")
+		if token == "" {
+			return fmt.Errorf("Telegram token cannot be empty")
+		}
+
+		data := map[string]any{"token": token}
+		if _, err := v.UpsertCredentialByChannel("telegram", "bearer", data); err != nil {
+			return fmt.Errorf("failed to store telegram credential: %w", err)
+		}
+		fmt.Fprintln(out, "Successfully encrypted and stored Telegram credentials in vault.")
+
+	case "whatsapp":
+		fmt.Fprintln(out, "Connecting WhatsApp Business Cloud API...")
+		token := prompt("WhatsApp Access Token: ")
+		if token == "" {
+			return fmt.Errorf("WhatsApp access token cannot be empty")
+		}
+		phoneID := prompt("WhatsApp Phone Number ID: ")
+
+		data := map[string]any{"token": token}
+		if phoneID != "" {
+			data["phone_number_id"] = phoneID
+		}
+		if _, err := v.UpsertCredentialByChannel("whatsapp", "bearer", data); err != nil {
+			return fmt.Errorf("failed to store whatsapp credential: %w", err)
+		}
+		fmt.Fprintln(out, "Successfully encrypted and stored WhatsApp credentials in vault.")
+
+	case "meta", "facebook", "instagram":
+		fmt.Fprintln(out, "Connecting Meta (Facebook / Instagram)...")
+		token := prompt("Meta Graph API Access Token: ")
+		if token == "" {
+			return fmt.Errorf("Meta access token cannot be empty")
+		}
+
+		data := map[string]any{"token": token}
+		if _, err := v.UpsertCredentialByChannel("meta", "bearer", data); err != nil {
+			return fmt.Errorf("failed to store meta credential: %w", err)
+		}
+		_, _ = v.UpsertCredentialByChannel("facebook", "bearer", data)
+		_, _ = v.UpsertCredentialByChannel("instagram", "bearer", data)
+		fmt.Fprintln(out, "Successfully encrypted and stored Meta credentials in vault.")
+
+	case "google_workspace", "gmail", "calendar":
+		fmt.Fprintln(out, "Connecting Google Workspace (Gmail / Google Calendar)...")
+		token := prompt("Google OAuth Access Token: ")
+		if token == "" {
+			return fmt.Errorf("Google access token cannot be empty")
+		}
+
+		data := map[string]any{"token": token}
+		if _, err := v.UpsertCredentialByChannel("google_workspace", "bearer", data); err != nil {
+			return fmt.Errorf("failed to store google_workspace credential: %w", err)
+		}
+		_, _ = v.UpsertCredentialByChannel("gmail", "bearer", data)
+		_, _ = v.UpsertCredentialByChannel("calendar", "bearer", data)
+		fmt.Fprintln(out, "Successfully encrypted and stored Google Workspace credentials in vault.")
+
 	case "gemini", "google":
 		fmt.Fprintln(out, "Connecting Google Gemini...")
 		key := prompt("Google Gemini API Key (starts with AIza... or AQ...): ")
@@ -195,11 +259,19 @@ func normalizeAppName(input string) string {
 		return "twitter"
 	case "5", "github":
 		return "github"
-	case "6", "gemini", "google":
+	case "6", "telegram":
+		return "telegram"
+	case "7", "whatsapp":
+		return "whatsapp"
+	case "8", "meta", "facebook", "instagram":
+		return "meta"
+	case "9", "google_workspace", "gmail", "calendar":
+		return "google_workspace"
+	case "10", "gemini", "google":
 		return "gemini"
-	case "7", "openai":
+	case "11", "openai":
 		return "openai"
-	case "8", "anthropic", "claude":
+	case "12", "anthropic", "claude":
 		return "anthropic"
 	default:
 		return clean

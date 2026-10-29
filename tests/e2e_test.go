@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -17,13 +16,11 @@ import (
 	"testing"
 	"time"
 
-	"clawbridge/pkg/agents"
-	"clawbridge/pkg/auth"
+	"clawbridge/pkg/bridge"
 	"clawbridge/pkg/daemon"
 	"clawbridge/pkg/dispatch"
 	"clawbridge/pkg/inbound"
 	"clawbridge/pkg/mcp"
-	"clawbridge/pkg/runner"
 	"clawbridge/pkg/vault"
 )
 
@@ -161,45 +158,21 @@ func TestE2E_FullLifecycleHarness(t *testing.T) {
 		t.Fatalf("timed out waiting for broadcast event")
 	}
 
-	// 6. Multi-Agent Concurrent Execution & Sliding Memory Window
-	agentsDir := filepath.Join(tempDir, "agents")
-	_ = os.MkdirAll(agentsDir, 0755)
-	reg := auth.NewAgentRegistry(dbMgr)
-
-	_, _ = agents.CreateAgentYAML(agentsDir, agents.AgentConfig{
-		Name:         "nemoclaw",
-		SystemPrompt: "NemoClaw support agent.",
-		Permissions:  []string{"slack:*"},
-	})
-	_, _ = agents.CreateAgentYAML(agentsDir, agents.AgentConfig{
-		Name:         "openclaw",
-		SystemPrompt: "OpenClaw engineering agent.",
-		Permissions:  []string{"jira:*"},
-	})
-
-	outBuf := &bytes.Buffer{}
-	orch := runner.NewOrchestrator(agentsDir, reg, nil, tools, broadcaster, outBuf)
-	orchCtx, orchCancel := context.WithCancel(context.Background())
-	defer orchCancel()
-
-	started, err := orch.StartAll(orchCtx)
-	if err != nil || len(started) != 2 {
-		t.Fatalf("failed to start orchestrator agents: %v", err)
+	// 6. Universal Bridge & MCP Integration (OpenClaw & NVIDIA NemoClaw)
+	openClawCfg, err := bridge.ConfigureOpenClawBridge(filepath.Join(tempDir, ".openclaw"), "/usr/local/bin/clawbridge")
+	if err != nil {
+		t.Fatalf("failed to configure openclaw bridge: %v", err)
+	}
+	if _, err := os.Stat(openClawCfg); err != nil {
+		t.Fatalf("expected openclaw.json to exist at %s: %v", openClawCfg, err)
 	}
 
-	// Send 20 tasks to NemoClaw to verify 15-turn sliding memory capping
-	for i := 1; i <= 20; i++ {
-		_ = orch.DispatchTask("nemoclaw", fmt.Sprintf("Support task %d", i))
+	nemoPolicy, err := bridge.ConfigureNemoClawBridge(filepath.Join(tempDir, ".nemoclaw"), "/usr/local/bin/clawbridge")
+	if err != nil {
+		t.Fatalf("failed to configure nemoclaw bridge: %v", err)
 	}
-
-	time.Sleep(100 * time.Millisecond)
-
-	nemoMem := orch.GetAgentMemory("nemoclaw")
-	if nemoMem == nil {
-		t.Fatalf("nemoclaw memory is nil")
-	}
-	if nemoMem.Count() > 15 {
-		t.Errorf("expected memory capped at 15 turns, got %d", nemoMem.Count())
+	if _, err := os.Stat(nemoPolicy); err != nil {
+		t.Fatalf("expected sandbox.yaml to exist at %s: %v", nemoPolicy, err)
 	}
 
 	// 7. Supervisor Auto-Recovery
@@ -207,7 +180,10 @@ func TestE2E_FullLifecycleHarness(t *testing.T) {
 	workerDone := make(chan struct{})
 	var runs int32
 
-	go sup.Supervise(orchCtx, "recovery-bot", func(wCtx context.Context) error {
+	supCtx, supCancel := context.WithCancel(context.Background())
+	defer supCancel()
+
+	go sup.Supervise(supCtx, "recovery-bot", func(wCtx context.Context) error {
 		r := atomic.AddInt32(&runs, 1)
 		if r == 1 {
 			panic("simulated fatal worker crash")
@@ -231,6 +207,4 @@ func TestE2E_FullLifecycleHarness(t *testing.T) {
 	if sup.PanicCount("recovery-bot") != 1 {
 		t.Errorf("expected 1 panic recorded, got %d", sup.PanicCount("recovery-bot"))
 	}
-
-	orch.StopAll()
 }

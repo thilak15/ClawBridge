@@ -85,3 +85,4 @@ func TestDetectBinaries(t *testing.T) {
 	_, _ = DetectOpenClawBinary()
 	_, _ = DetectNemoClawBinary()
 }
+
